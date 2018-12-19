@@ -1,4 +1,5 @@
 
+use std::fmt;
 use std::ops::{Index, IndexMut};
 
 pub trait Zero {
@@ -20,6 +21,9 @@ macro_rules! impl_zero {
 impl_zero!(u8, i8, u16, i16, u32, i32, u64, i64);
 
 /// For now we'll only consider greyscale images
+// TODO: derived Eq checks for buffer equality, but we only care about
+// TODO: the initial segment of length width * height
+#[derive(Clone, PartialEq, Eq)]
 pub struct Image<T> {
     pub width: usize,
     pub height: usize,
@@ -31,13 +35,19 @@ impl<T: Zero + Clone> Image<T> {
         let buffer = vec![T::zero(); width * height];
         Image { width, height, buffer }
     }
+}
 
+impl<T> Image<T> {
     pub fn width(&self) -> usize {
         self.width
     }
 
     pub fn height(&self) -> usize {
         self.height
+    }
+
+    pub fn dimensions(&self) -> (usize, usize) {
+        (self.width, self.height)
     }
 }
 
@@ -52,6 +62,24 @@ impl<T> Index<[usize; 2]> for Image<T> {
 impl<T> IndexMut<[usize; 2]> for Image<T> {
     fn index_mut(&mut self, index: [usize; 2]) -> &mut T {
         &mut self.buffer[index[1] * self.width + index[0]]
+    }
+}
+
+impl<T: fmt::Debug> fmt::Debug for Image<T> {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        writeln!(f, "Image(width: {:?}, height: {:?}, buffer: {{", self.width, self.height)?;
+        for y in 0..self.height() {
+            write!(f, "  ")?;
+            for x in 0..self.width() {
+                write!(f, "{:?}", self[[x, y]])?;
+                if x < self.width() - 1 {
+                    write!(f, ", ")?;
+                }
+            }
+            writeln!(f, "")?;
+        }
+        writeln!(f, "}}")?;
+        Ok(())
     }
 }
 
