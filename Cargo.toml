@@ -6,3 +6,7 @@ edition = "2018"
 
 [dependencies]
 paste = "0.1.3"
+png = "0.13.2"
+
+[dev-dependencies]
+structopt = "0.2"

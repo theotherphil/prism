@@ -6,10 +6,12 @@
 
 #[macro_use]
 pub mod image;
+pub mod png;
 
 extern crate test;
 
-use crate::image::*;
+pub use crate::image::*;
+pub use crate::png::*;
 
 pub type GrayImage = Image<u8>;
 
