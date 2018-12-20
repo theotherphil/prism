@@ -7,11 +7,13 @@
 #[macro_use]
 pub mod image;
 pub mod io;
+pub mod tracer;
 
 extern crate test;
 
 pub use crate::image::*;
 pub use crate::io::*;
+pub use crate::tracer::*;
 
 // Running example: 3x3 box filter
 
