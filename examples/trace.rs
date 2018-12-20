@@ -36,9 +36,13 @@ struct TraceImage {
 
 impl TraceImage {
     fn new(tracer: &Tracer, width: usize, height: usize) -> TraceImage {
+        Self::from_image(tracer, &GrayImage::new(width, height))
+    }
+
+    fn from_image(trace: &Tracer, image: &GrayImage) -> TraceImage {
         TraceImage {
-            initial_image: GrayImage::new(width, height),
-            current_image: GrayImage::new(width, height),
+            initial_image: image.clone(),
+            current_image: image.clone(),
             trace: vec![]
         }
     }
@@ -54,9 +58,9 @@ impl TraceImage {
     }
 }
 
-fn upscale(image: &GrayImage, factor: u8) -> GrayImage {
+fn upscale<T: Copy + Zero>(image: &Image<T>, factor: u8) -> Image<T> {
     let (w, h) = (factor as usize * image.width(), factor as usize * image.height());
-    let mut result = GrayImage::new(w, h);
+    let mut result = Image::new(w, h);
     for y in 0..h {
         for x in 0..w {
             result[[x, y]] = image[[x / factor as usize, y / factor as usize]];
@@ -68,16 +72,27 @@ fn upscale(image: &GrayImage, factor: u8) -> GrayImage {
 // replay needs to be able to highlight pixels that have been changed
 // we should do this with colour, but for now we'll just use a distinguishing pattern
 // upscaling should also be customisable
-fn replay(image: &TraceImage, scale_factor: u8) -> Vec<GrayImage> {
-    let mut frames = vec![upscale(&image.initial_image, scale_factor)];
-    let mut current_image = image.initial_image.clone();
+fn replay(image: &TraceImage, scale_factor: u8) -> Vec<RgbImage> {
+    let mut current_image = gray_to_rgb(&image.initial_image);
+
+    let mut frames = vec![];
+    frames.push(upscale(&current_image, scale_factor));
 
     for action in &image.trace {
         match action {
-            // We'll want to indicate these visually at some point, but ignore for now
-            Action::Read(_, _) => { },
+            Action::Read(x, y) => { 
+                let current = current_image[[*x, *y]];
+                current_image[[*x, *y]] = [0, 255, 0];
+                frames.push(upscale(&current_image, scale_factor));
+
+                current_image[[*x, *y]] = current;
+                frames.push(upscale(&current_image, scale_factor));
+            },
             Action::Write(x, y, c) => {
-                current_image[[*x, *y]] = *c;
+                current_image[[*x, *y]] = [255, 0, 0];
+                frames.push(upscale(&current_image, scale_factor));
+
+                current_image[[*x, *y]] = [*c, *c, *c];
                 frames.push(upscale(&current_image, scale_factor));
             }
         }
@@ -114,11 +129,12 @@ fn main() -> std::io::Result<()> {
     for y in 0..h {
         for x in 0..w {
             r.set(x, y, 20 * (x + y) as u8);
+            let _ = r.get(y, x);
         }
     }
 
     let frames = replay(&r, 10);
-    animation(&frames, 200, &opts.output_dir.join("trace.gif"))?;
+    animation_rgb(&frames, 100, &opts.output_dir.join("trace.gif"))?;
 
     Ok(())
 }

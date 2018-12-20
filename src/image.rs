@@ -20,6 +20,12 @@ macro_rules! impl_zero {
 
 impl_zero!(u8, i8, u16, i16, u32, i32, u64, i64);
 
+impl Zero for [u8; 3] {
+    fn zero() -> [u8; 3] {
+        [0, 0, 0]
+    }
+}
+
 /// For now we'll only consider greyscale images
 // TODO: derived Eq checks for buffer equality, but we only care about
 // TODO: the initial segment of length width * height
@@ -29,6 +35,10 @@ pub struct Image<T> {
     pub height: usize,
     pub buffer: Vec<T>
 }
+
+pub type GrayImage = Image<u8>;
+// This is a stupid representation, but it'll do for now
+pub type RgbImage = Image<[u8; 3]>;
 
 impl<T: Zero + Clone> Image<T> {
     pub fn new(width: usize, height: usize) -> Image<T> {

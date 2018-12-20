@@ -13,8 +13,6 @@ extern crate test;
 pub use crate::image::*;
 pub use crate::io::*;
 
-pub type GrayImage = Image<u8>;
-
 // Running example: 3x3 box filter
 
 /// 3x3 blur with no intermediate storage
