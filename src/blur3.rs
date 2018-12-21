@@ -11,6 +11,10 @@ use crate::traits::*;
 
 // Running example: 3x3 box filter
 
+fn mean(a: u8, b: u8, c: u8) -> u8 {
+    ((a as u16 + b as u16 + c as u16) / 3) as u8
+}
+
 /// 3x3 blur with no intermediate storage
 pub fn blur3_inline<S: Storage>(storage: &mut S, image: Rc<RefCell<S::Image>>) -> Rc<RefCell<S::Image>> {
     let image = &*image.borrow();
@@ -31,11 +35,11 @@ pub fn blur3_inline<S: Storage>(storage: &mut S, image: Rc<RefCell<S::Image>>) -
 fn blur3_inline_impl<I: Image<u8>>(image: &I, result: &mut I) {
     for y in 1..image.height() - 1 {
         for x in 1..image.width() - 1 {
-            let t = (image.get(x - 1, y - 1) as u16 + image.get(x, y - 1) as u16 + image.get(x + 1, y - 1) as u16) / 3;
-            let m = (image.get(x - 1, y) as u16 + image.get(x, y) as u16 + image.get(x + 1, y) as u16) / 3;
-            let b = (image.get(x - 1, y + 1) as u16 + image.get(x, y + 1) as u16 + image.get(x + 1, y + 1) as u16) / 3;
-            let p = (t + m + b) / 3;
-            result.set(x, y, p as u8);
+            let t = mean(image.get(x - 1, y - 1), image.get(x, y - 1), image.get(x + 1, y - 1));
+            let m = mean(image.get(x - 1, y), image.get(x, y), image.get(x + 1, y));
+            let b = mean(image.get(x - 1, y + 1), image.get(x, y + 1), image.get(x + 1, y + 1));
+            let p = mean(t, m, b);
+            result.set(x, y, p);
         }
     }
 }
@@ -56,12 +60,12 @@ pub fn blur3_intermediate<S: Storage>(storage: &mut S, image: Rc<RefCell<S::Imag
 fn blur3_full_intermediate_impl<I: Image<u8>>(image: &I, h: &mut I, v: &mut I) {
     for y in 0..image.height() {
         for x in 1..image.width() - 1 {
-            h.set(x, y, ((image.get(x - 1, y) as u16 + image.get(x, y) as u16 + image.get(x + 1, y) as u16) / 3) as u8);
+            h.set(x, y, mean(image.get(x - 1, y), image.get(x, y), image.get(x + 1, y)));
         }
     }
     for y in 1..image.height() - 1 {
         for x in 0..image.width() {
-            v.set(x, y, ((h.get(x, y - 1) as u16 + h.get(x, y) as u16 + h.get(x, y + 1) as u16) / 3) as u8);
+            v.set(x, y, mean(h.get(x, y - 1), h.get(x, y), h.get(x, y + 1)));
         }
     }
 }
@@ -91,12 +95,8 @@ fn blur3_split_y_impl<I: Image<u8>>(image: &I, strip: &mut I, v: &mut I, strip_h
             }
             let y_image = y_buffer + y_offset - 1;
             for x in 1..image.width() - 1 {
-                let p = (
-                    image.get(x - 1, y_image) as u16
-                    + image.get(x, y_image) as u16
-                    + image.get(x + 1, y_image) as u16
-                    ) / 3;
-                strip.set(x, y_buffer, p as u8);
+                let p = mean(image.get(x - 1, y_image), image.get(x, y_image), image.get(x + 1, y_image));
+                strip.set(x, y_buffer, p);
             }
         }
 
@@ -107,12 +107,8 @@ fn blur3_split_y_impl<I: Image<u8>>(image: &I, strip: &mut I, v: &mut I, strip_h
             let y_buffer = y_inner + 1;
 
             for x in 0..image.width() {
-                let p = (
-                    strip.get(x, y_buffer - 1) as u16
-                    + strip.get(x, y_buffer) as u16
-                    + strip.get(x, y_buffer + 1) as u16
-                    ) / 3;
-                v.set(x, y_inner + y_offset, p as u8);
+                let p = mean(strip.get(x, y_buffer - 1), strip.get(x, y_buffer), strip.get(x, y_buffer + 1));
+                v.set(x, y_inner + y_offset, p);
             }
         }
     }
@@ -163,12 +159,10 @@ fn blur3_tiled_impl<I: Image<u8>>(image: &I, tile: &mut I, result: &mut I, tile_
                     }
                     let x_image = x_buffer + x_offset;
 
-                    let p = (
-                        image.get(x_image - 1, y_image) as u16
-                        + image.get(x_image, y_image) as u16
-                        + image.get(x_image + 1, y_image) as u16
-                    ) / 3;
-                    tile.set(x_buffer, y_buffer, p as u8);
+                    let p = mean(
+                        image.get(x_image - 1, y_image), image.get(x_image, y_image), image.get(x_image + 1, y_image)
+                    );
+                    tile.set(x_buffer, y_buffer, p);
                 }
             }
 
@@ -185,12 +179,10 @@ fn blur3_tiled_impl<I: Image<u8>>(image: &I, tile: &mut I, result: &mut I, tile_
                     }
                     let x_buffer = x_inner;
 
-                    let p = (
-                        tile.get(x_buffer, y_buffer - 1) as u16
-                        + tile.get(x_buffer, y_buffer) as u16
-                        + tile.get(x_buffer, y_buffer + 1) as u16
-                        ) / 3;
-                        result.set(x_buffer + x_offset, y_inner + y_offset, p as u8);
+                    let p = mean(
+                        tile.get(x_buffer, y_buffer - 1), tile.get(x_buffer, y_buffer), tile.get(x_buffer, y_buffer + 1)
+                    );
+                    result.set(x_buffer + x_offset, y_inner + y_offset, p);
                 }
             }
         }
