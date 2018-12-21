@@ -35,8 +35,10 @@ pub fn blur3_inline(image: &GrayImage) -> GrayImage {
     result
 }
 
+// This is approximately 8x slower than blur3_inline and I'm not sure why
+#[inline(never)]
 pub fn trace_blur3_inline<S: Storage>(storage: &mut S, image: Rc<RefCell<S::Image>>) -> Rc<RefCell<S::Image>> {
-    let image = image.borrow_mut();
+    let image = image.borrow();
     let result_ref = storage.create_image(image.width(), image.height());
 
     {
@@ -240,7 +242,7 @@ mod tests {
         ($name:ident, $blur_function:ident) => {
             #[bench]
             fn $name(b: &mut Bencher) {
-                let i = black_box(image(640, 900));
+                let i = black_box(image(640, 300));
                 b.iter(|| black_box($blur_function(&i)));
             }
         };
@@ -259,7 +261,7 @@ mod tests {
         ($name:ident, $blur_function:ident) => {
             #[bench]
             fn $name(b: &mut Bencher) {
-                let i = black_box(image(640, 900));
+                let i = black_box(image(640, 300));
                 let mut s = BufferStore::new();
                 let i = s.create_from_image(&i);
                 b.iter(|| {

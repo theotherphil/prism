@@ -43,15 +43,15 @@ impl BufferStore {
     }
 
     pub fn create_from_image(&mut self, image: &GrayImage) -> Rc<RefCell<GrayImage>> {
-        self.add_image(image)
+        self.add_image(image.clone())
     }
 
     pub fn clear(&mut self) {
         self.store.clear();
     }
 
-    fn add_image(&mut self, image: &GrayImage) -> Rc<RefCell<GrayImage>> {
-        let image = Rc::new(RefCell::new(image.clone()));
+    fn add_image(&mut self, image: GrayImage) -> Rc<RefCell<GrayImage>> {
+        let image = Rc::new(RefCell::new(image));
         self.store.push(image.clone());
         image
     }
@@ -61,7 +61,7 @@ impl Storage for BufferStore {
     type Image = GrayImage;
 
     fn create_image(&mut self, width: usize, height: usize) -> Rc<RefCell<GrayImage>> {
-        self.add_image(&GrayImage::new(width, height))
+        self.add_image(GrayImage::new(width, height))
     }
 
     fn images(self) -> Vec<GrayImage> {
@@ -94,14 +94,17 @@ pub struct ImageBuffer<T> {
 }
 
 impl<T: Zero + Copy + Clone> Image<T> for ImageBuffer<T> {
+    #[inline]
     fn width(&self) -> usize {
         self.width
     }
 
+    #[inline]
     fn height(&self) -> usize {
         self.height
     }
 
+    #[inline]
     fn data(&self) -> &[T] {
         &self.buffer
     }
@@ -112,10 +115,12 @@ impl<T: Zero + Copy + Clone> Image<T> for ImageBuffer<T> {
         }
     }
 
+    #[inline]
     fn get(&self, x: usize, y: usize) -> T {
         unsafe { *self.buffer.get_unchecked(y * self.width + x) }
     }
 
+    #[inline]
     fn set(&mut self, x: usize, y: usize, c: T) {
         unsafe { *self.buffer.get_unchecked_mut(y * self.width + x) = c; }
     }
