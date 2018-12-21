@@ -118,7 +118,7 @@ fn create_gradient_image(width: usize, height: usize) -> GrayImage {
     let mut image = GrayImage::new(width, height);
     for y in 0..image.height() {
         for x in 0..image.width() {
-            image[[x, y]] = (10 * (x % 10 + y % 10) as u8) + 50;
+            image.set(x, y, (10 * (x % 10 + y % 10) as u8) + 50);
         }
     }
     image

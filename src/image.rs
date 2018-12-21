@@ -1,6 +1,5 @@
 
 use std::fmt;
-use std::ops::{Index, IndexMut};
 
 pub trait Zero {
     fn zero() -> Self;
@@ -76,27 +75,23 @@ impl<T> Image<T> {
     }
 }
 
-impl<T> Index<[usize; 2]> for Image<T> {
-    type Output = T;
+impl <T: Copy> Image<T> {
+    pub fn get(&self, x: usize, y: usize) -> T {
+        unsafe { *self.buffer.get_unchecked(y * self.width + x) }
+    }
 
-    fn index(&self, index: [usize; 2]) -> &T {
-        unsafe { self.buffer.get_unchecked(index[1] * self.width + index[0]) }
+    pub fn set(&mut self, x: usize, y: usize, c: T) {
+        unsafe { *self.buffer.get_unchecked_mut(y * self.width + x) = c; }
     }
 }
 
-impl<T> IndexMut<[usize; 2]> for Image<T> {
-    fn index_mut(&mut self, index: [usize; 2]) -> &mut T {
-        unsafe { self.buffer.get_unchecked_mut(index[1] * self.width + index[0]) }
-    }
-}
-
-impl<T: fmt::Debug> fmt::Debug for Image<T> {
+impl<T: fmt::Debug + Copy> fmt::Debug for Image<T> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         writeln!(f, "Image(width: {:?}, height: {:?}, buffer: {{", self.width, self.height)?;
         for y in 0..self.height() {
             write!(f, "  ")?;
             for x in 0..self.width() {
-                write!(f, "{:?}", self[[x, y]])?;
+                write!(f, "{:?}", self.get(x, y))?;
                 if x < self.width() - 1 {
                     write!(f, ", ")?;
                 }

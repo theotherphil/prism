@@ -23,11 +23,11 @@ pub fn blur3_inline(image: &GrayImage) -> GrayImage {
     for y in 1..image.height() - 1 {
         for x in 1..image.width() - 1 {
             let mut temp = [0; 3];
-            temp[0] = (image[[x - 1, y - 1]] as u16 + image[[x, y - 1]] as u16 + image[[x + 1, y - 1]] as u16) / 3;
-            temp[1] = (image[[x - 1, y]] as u16 + image[[x, y]] as u16 + image[[x + 1, y]] as u16) / 3;
-            temp[2] = (image[[x - 1, y + 1]] as u16 + image[[x, y + 1]] as u16 + image[[x + 1, y + 1]] as u16) / 3;
+            temp[0] = (image.get(x - 1, y - 1) as u16 + image.get(x, y - 1) as u16 + image.get(x + 1, y - 1) as u16) / 3;
+            temp[1] = (image.get(x - 1, y) as u16 + image.get(x, y) as u16 + image.get(x + 1, y) as u16) / 3;
+            temp[2] = (image.get(x - 1, y + 1) as u16 + image.get(x, y + 1) as u16 + image.get(x + 1, y + 1) as u16) / 3;
             let p = (temp[0] + temp[1] + temp[2]) / 3;
-            result[[x, y]] = p as u8;
+            result.set(x, y, p as u8);
         }
     }
     result
@@ -38,13 +38,13 @@ pub fn blur3_full_intermediate(image: &GrayImage) -> GrayImage {
     let mut h = GrayImage::new(image.width(), image.height());
     for y in 0..image.height() {
         for x in 1..image.width() - 1 {
-            h[[x, y]] = ((image[[x - 1, y]] as u16 + image[[x, y]] as u16 + image[[x + 1, y]] as u16) / 3) as u8;
+            h.set(x, y, ((image.get(x - 1, y) as u16 + image.get(x, y) as u16 + image.get(x + 1, y) as u16) / 3) as u8);
         }
     }
     let mut v = GrayImage::new(image.width(), image.height());
     for y in 1..image.height() - 1 {
         for x in 0..image.width() {
-            v[[x, y]] = ((h[[x, y - 1]] as u16 + h[[x, y]] as u16 + h[[x, y + 1]] as u16) / 3) as u8;
+            v.set(x, y, ((h.get(x, y - 1) as u16 + h.get(x, y) as u16 + h.get(x, y + 1) as u16) / 3) as u8);
         }
     }
     v
@@ -70,8 +70,8 @@ pub fn blur3_split_y(image: &GrayImage, strip_height: usize) -> GrayImage {
             }
             let y_image = y_buffer + y_offset - 1;
             for x in 1..image.width() - 1 {
-                let p = (image[[x - 1, y_image]] as u16 + image[[x, y_image]] as u16 + image[[x + 1, y_image]] as u16) / 3;
-                strip[[x, y_buffer]] = p as u8;                 
+                let p = (image.get(x - 1, y_image) as u16 + image.get(x, y_image) as u16 + image.get(x + 1, y_image) as u16) / 3;
+                strip.set(x, y_buffer, p as u8);
             }
         }
 
@@ -81,8 +81,8 @@ pub fn blur3_split_y(image: &GrayImage, strip_height: usize) -> GrayImage {
             }
             for x in 0..image.width() {
                 let y_buffer = y_inner + 1;
-                let p = (strip[[x, y_buffer - 1]] as u16 + strip[[x, y_buffer]] as u16 + strip[[x, y_buffer + 1]] as u16) / 3;
-                v[[x, y_inner + y_offset]] = p as u8;
+                let p = (strip.get(x, y_buffer - 1) as u16 + strip.get(x, y_buffer) as u16 + strip.get(x, y_buffer + 1) as u16) / 3;
+                v.set(x, y_inner + y_offset, p as u8);
             }
         }
     }
@@ -99,7 +99,7 @@ mod tests {
         let mut i = GrayImage::new(width, height);
         for y in 0..height {
             for x in 0..width {
-                i[[x, y]] = ((x + y) % 17) as u8;
+                i.set(x, y, ((x + y) % 17) as u8);
             }
         }
         i
@@ -109,10 +109,10 @@ mod tests {
         let mut result = Image::new(image.width(), image.height());
         for y in 1..image.height() - 1 {
             for x in 1..image.width() - 1 {
-                let t = (image[[x - 1, y - 1]] + image[[x, y - 1]] + image[[x + 1, y - 1]]) / 3;
-                let m = (image[[x - 1, y]] + image[[x, y]] + image[[x + 1, y]]) / 3;
-                let b = (image[[x - 1, y + 1]] + image[[x, y + 1]] + image[[x + 1, y + 1]]) / 3;
-                result[[x, y]] = (t + m + b) / 3;
+                let t = (image.get(x - 1, y - 1) + image.get(x, y - 1) + image.get(x + 1, y - 1)) / 3;
+                let m = (image.get(x - 1, y) + image.get(x, y) + image.get(x + 1, y)) / 3;
+                let b = (image.get(x - 1, y + 1) + image.get(x, y + 1) + image.get(x + 1, y + 1)) / 3;
+                result.set(x, y, (t + m + b) / 3);
             }
         }
         result

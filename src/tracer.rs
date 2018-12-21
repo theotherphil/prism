@@ -66,12 +66,12 @@ impl TraceImage {
 
     pub fn get(&self, x: usize, y: usize) -> u8 {
         self.trace.borrow_mut().push(Action::Read(self.incr_count(), (x, y)));
-        self.current_image[[x, y]]
+        self.current_image.get(x, y)
     }
 
     pub fn set(&mut self, x: usize, y: usize, c: u8) {
         self.trace.borrow_mut().push(Action::Write(self.incr_count(), (x, y), c));
-        self.current_image[[x, y]] = c;
+        self.current_image.set(x, y, c);
     }
 
     pub fn clear(&mut self) {
@@ -102,7 +102,7 @@ pub fn upscale<T: Copy + Zero>(image: &Image<T>, factor: u8) -> Image<T> {
     let mut result = Image::new(w, h);
     for y in 0..h {
         for x in 0..w {
-            result[[x, y]] = image[[x / factor as usize, y / factor as usize]];
+            result.set(x, y, image.get(x / factor as usize, y / factor as usize));
         }
     }
     result
@@ -143,21 +143,21 @@ pub fn replay(images: &[TraceImage]) -> Vec<RgbImage> {
                 let x = *x + offset.0;
                 let y = *y + offset.1;
 
-                let current = current_image[[x, y]];
-                current_image[[x, y]] = green;
+                let current = current_image.get(x, y);
+                current_image.set(x, y, green);
                 frames.push(current_image.clone());
 
-                current_image[[x, y]] = current;
+                current_image.set(x, y, current);
                 frames.push(current_image.clone());
             },
             Action::Write(_, (x, y), c) => {
                 let x = *x + offset.0;
                 let y = *y + offset.1;
 
-                current_image[[x, y]] = red;
+                current_image.set(x, y, red);
                 frames.push(current_image.clone());
 
-                current_image[[x, y]] = [*c, *c, *c];
+                current_image.set(x, y, [*c, *c, *c]);
                 frames.push(current_image.clone());
             },
             Action::Clear(_) => {
@@ -165,13 +165,13 @@ pub fn replay(images: &[TraceImage]) -> Vec<RgbImage> {
 
                 for y in 0..h {
                     for x in 0..w {
-                        current_image[[x + offset.0, y + offset.1]] = red;
+                        current_image.set(x + offset.0, y + offset.1, red);
                     }
                 }
                 frames.push(current_image.clone());
                 for y in 0..h {
                     for x in 0..w {
-                        current_image[[x + offset.0, y + offset.1]] = black;
+                        current_image.set(x + offset.0, y + offset.1, black);
                     }
                 }
                 frames.push(current_image.clone());
@@ -214,7 +214,7 @@ fn combine(images: &[RgbImage], layout: &Layout) -> RgbImage {
     let background = [120, 120, 120];
     for y in 0..result.height() {
         for x in 0..result.width() {
-            result[[x, y]] = background;
+            result.set(x, y, background);
         }
     }
 
@@ -222,7 +222,7 @@ fn combine(images: &[RgbImage], layout: &Layout) -> RgbImage {
         let offset = layout.offsets[n];
         for y in 0..image.height() {
             for x in 0..image.width() {
-                result[[x + offset.0, y + offset.1]] = image[[x, y]];
+                result.set(x + offset.0, y + offset.1, image.get(x, y));
             }
         }
     }
