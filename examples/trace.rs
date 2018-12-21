@@ -14,10 +14,10 @@ struct Opts {
     output_dir: PathBuf
 }
 
-fn trace_blur3_inline(tracer: &mut Tracer, image: Rc<RefCell<TraceImage>>) -> Rc<RefCell<TraceImage>> {
+fn trace_blur3_inline(storage: &mut Tracer, image: Rc<RefCell<TraceImage>>) -> Rc<RefCell<TraceImage>> {
     let image = image.borrow_mut();
     let (w, h) = image.dimensions();
-    let result_ref = tracer.create_image("result", w, h);
+    let result_ref = storage.create_image(w, h);
 
     {
         let mut result = result_ref.borrow_mut();
@@ -36,12 +36,12 @@ fn trace_blur3_inline(tracer: &mut Tracer, image: Rc<RefCell<TraceImage>>) -> Rc
     result_ref
 }
 
-fn trace_blur3_intermediate(tracer: &mut Tracer, image: Rc<RefCell<TraceImage>>) -> Rc<RefCell<TraceImage>> {
+fn trace_blur3_intermediate(storage: &mut Tracer, image: Rc<RefCell<TraceImage>>) -> Rc<RefCell<TraceImage>> {
     let image = image.borrow_mut();
     let (w, h) = image.dimensions();
 
-    let hblur_ref = tracer.create_image("h", w, h);
-    let vblur_ref = tracer.create_image("v", w, h);
+    let hblur_ref = storage.create_image(w, h);
+    let vblur_ref = storage.create_image(w, h);
 
     {
         let mut hblur = hblur_ref.borrow_mut();
@@ -63,7 +63,7 @@ fn trace_blur3_intermediate(tracer: &mut Tracer, image: Rc<RefCell<TraceImage>>)
     vblur_ref
 }
 
-fn trace_blur3_stripped(tracer: &mut Tracer, image: Rc<RefCell<TraceImage>>) -> Rc<RefCell<TraceImage>> {
+fn trace_blur3_stripped(storage: &mut Tracer, image: Rc<RefCell<TraceImage>>) -> Rc<RefCell<TraceImage>> {
     let image = image.borrow_mut();
     let strip_height = 2;
 
@@ -72,8 +72,8 @@ fn trace_blur3_stripped(tracer: &mut Tracer, image: Rc<RefCell<TraceImage>>) -> 
 
     let (w, h) = image.dimensions();
 
-    let strip_ref = tracer.create_image("s", w, buffer_height);
-    let v_ref = tracer.create_image("v", w, h);
+    let strip_ref = storage.create_image(w, buffer_height);
+    let v_ref = storage.create_image(w, h);
 
     {
         let mut v = v_ref.borrow_mut();
@@ -159,7 +159,7 @@ fn main() -> std::io::Result<()> {
         let mut t = Tracer::new();
         {
             let i = create_gradient_image(5, 6);
-            let i = t.create_from_image("input", &i);
+            let i = t.create_from_image(&i);
             let _ = trace_blur3_inline(&mut t, i);
         }
         replays.push(create_replay_image(dir, "inline", &t.images())?);
@@ -168,7 +168,7 @@ fn main() -> std::io::Result<()> {
         let mut t = Tracer::new();
         {
             let i = create_gradient_image(5, 6);
-            let i = t.create_from_image("input", &i);
+            let i = t.create_from_image(&i);
             let _ = trace_blur3_intermediate(&mut t, i);
         }
         replays.push(create_replay_image(dir, "intermediate", &t.images())?);
@@ -177,7 +177,7 @@ fn main() -> std::io::Result<()> {
         let mut t = Tracer::new();
         {
             let i = create_gradient_image(5, 6);
-            let i = t.create_from_image("input", &i);
+            let i = t.create_from_image(&i);
             let _ = trace_blur3_stripped(&mut t, i);
         }
         replays.push(create_replay_image(dir, "stripped", &t.images())?);

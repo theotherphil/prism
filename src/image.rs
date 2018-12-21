@@ -29,7 +29,7 @@ impl Zero for [u8; 3] {
 
 pub trait Storage {
     type Image;
-    fn create_image(&mut self, name: &str, width: usize, height: usize) -> Rc<RefCell<Self::Image>>;
+    fn create_image(&mut self, width: usize, height: usize) -> Rc<RefCell<Self::Image>>;
     fn images(self) -> Vec<Self::Image>;
 }
 
