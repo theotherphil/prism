@@ -106,7 +106,7 @@ fn main() -> std::io::Result<()> {
     let mut i = GrayImage::new(4, 4);
     for y in 0..i.height() {
         for x in 0..i.width() {
-            i[[x, y]] = 10 * (x % 10 + y % 10) as u8;
+            i[[x, y]] = (10 * (x % 10 + y % 10) as u8) + 50;
         }
     }
 
