@@ -75,6 +75,15 @@ fn main() -> std::io::Result<()> {
         }
         replays.push(create_replay_image(dir, "stripped", &t.images())?);
     }
+        {
+        let mut t = Tracer::new();
+        {
+            let i = create_gradient_image(9, 6);
+            let i = t.create_from_image(&i);
+            let _ = blur3_tiled(&mut t, i, 3, 3);
+        }
+        replays.push(create_replay_image(dir, "tiled", &t.images())?);
+    }
 
     write_html_page(dir, "traces.html", &replays)?;
 

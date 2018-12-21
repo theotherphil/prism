@@ -104,14 +104,94 @@ fn blur3_split_y_impl<I: Image<u8>>(image: &I, strip: &mut I, v: &mut I, strip_h
             if y_inner + y_offset == 0 || y_inner + y_offset == image.height() - 1 {
                 continue;
             }
+            let y_buffer = y_inner + 1;
+
             for x in 0..image.width() {
-                let y_buffer = y_inner + 1;
                 let p = (
                     strip.get(x, y_buffer - 1) as u16
                     + strip.get(x, y_buffer) as u16
                     + strip.get(x, y_buffer + 1) as u16
                     ) / 3;
                 v.set(x, y_inner + y_offset, p as u8);
+            }
+        }
+    }
+}
+
+/// 3x3 blur where a strip of horizontal blur of height strip_height is computed and stored
+pub fn blur3_tiled<S: Storage>(
+    storage: &mut S,
+    image: Rc<RefCell<S::Image>>,
+    tile_width: usize,
+    tile_height: usize
+) -> Rc<RefCell<S::Image>> {
+    let image = &*image.borrow();
+    assert!(image.height() % tile_width == 0);
+    assert!(image.height() % tile_height == 0);
+
+    let tile_ref = storage.create_image(tile_width, tile_height + 2);
+    let result_ref = storage.create_image(image.width(), image.height());
+    {
+        let tile = &mut *tile_ref.borrow_mut();
+        let result = &mut *result_ref.borrow_mut();
+        blur3_tiled_impl(image, tile, result, tile_width, tile_height);
+    }
+    result_ref
+}
+
+// The bounds checking here is awful. Need to do something more sensible
+fn blur3_tiled_impl<I: Image<u8>>(image: &I, tile: &mut I, result: &mut I, tile_width: usize, tile_height: usize) {
+    // tile height is tile_height
+    // tile width is tile_width + 2
+    for y_outer in 0..image.height() / tile_height {
+        let y_offset = y_outer * tile_height;
+
+        for x_outer in 0..image.width() / tile_width {
+            let x_offset = x_outer * tile_width;
+            tile.clear();
+
+            // Populate the tile with the horizontal blur
+            for y_buffer in 0..tile.height() {
+                if y_buffer + y_offset == 0 || y_buffer + y_offset > image.height() {
+                    continue;
+                }
+                let y_image = y_buffer + y_offset - 1;
+
+                for x_buffer in 0..tile.width() {
+                    if x_buffer + x_offset == 0 || x_buffer + x_offset > image.width() {
+                        continue;
+                    }
+                    let x_image = x_buffer + x_offset;
+
+                    let p = (
+                        image.get(x_image - 1, y_image) as u16
+                        + image.get(x_image, y_image) as u16
+                        + image.get(x_image + 1, y_image) as u16
+                    ) / 3;
+                    tile.set(x_buffer, y_buffer, p as u8);
+                }
+            }
+
+            // Compute vertical blur using tile contents
+            for y_inner in 0..tile_height {
+                if y_inner + y_offset == 0 || y_inner + y_offset == image.height() - 1 {
+                    continue;
+                }
+                let y_buffer = y_inner + 1;
+
+                for x_inner in 0..tile_width {
+                    if x_inner + x_offset == 0 || x_inner + x_offset == image.width() - 1 {
+                        continue;
+                    }
+                    let x_buffer = x_inner;
+
+                    let p = (
+                        tile.get(x_buffer, y_buffer - 1) as u16
+                        + tile.get(x_buffer, y_buffer) as u16
+                        + tile.get(x_buffer, y_buffer + 1) as u16
+                        ) / 3;
+                        result.set(x_buffer + x_offset, y_inner + y_offset, p as u8);
+                }
             }
         }
     }
@@ -160,7 +240,7 @@ mod tests {
                 #[test]
                 fn [<test_ $blur_function>]() {
                     let mut s = BufferStore::new();
-                    let i = image(&mut s, 5, 10);
+                    let i = image(&mut s, 10, 10);
                     let actual = $blur_function(&mut s, i.clone());
                     let expected = blur3_reference(&mut s, i);
                     assert_eq!(&*actual.borrow(), &*expected.borrow());
@@ -200,8 +280,13 @@ mod tests {
         blur3_split_y(storage, image, 2)
     }
 
+    fn blur3_tiled_5<S: Storage>(storage: &mut S, image: Rc<RefCell<S::Image>>) -> Rc<RefCell<S::Image>> {
+        blur3_tiled(storage, image, 5, 5)
+    }
+
     bench_and_test_blur3!(blur3_inline);
     bench_and_test_blur3!(blur3_intermediate);
     bench_and_test_blur3!(blur3_split_y_5);
     bench_and_test_blur3!(blur3_split_y_2);
+    bench_and_test_blur3!(blur3_tiled_5);
 }
