@@ -1,6 +1,6 @@
 
 use prism::*;
-use std::time::{Duration, SystemTime};
+use std::time::SystemTime;
 
 fn compare_blur_perf(width: usize) {
     let mut image = GrayImage::new(width, width);
