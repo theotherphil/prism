@@ -53,7 +53,7 @@ fn main() -> std::io::Result<()> {
         {
             let i = create_gradient_image(5, 6);
             let i = t.create_from_image(&i);
-            let _ = trace_blur3_inline(&mut t, i);
+            let _ = blur3_inline(&mut t, i);
         }
         replays.push(create_replay_image(dir, "inline", &t.images())?);
     }
@@ -62,7 +62,7 @@ fn main() -> std::io::Result<()> {
         {
             let i = create_gradient_image(5, 6);
             let i = t.create_from_image(&i);
-            let _ = trace_blur3_intermediate(&mut t, i);
+            let _ = blur3_intermediate(&mut t, i);
         }
         replays.push(create_replay_image(dir, "intermediate", &t.images())?);
     }
@@ -71,7 +71,7 @@ fn main() -> std::io::Result<()> {
         {
             let i = create_gradient_image(5, 6);
             let i = t.create_from_image(&i);
-            let _ = trace_blur3_stripped(&mut t, i);
+            let _ = blur3_split_y(&mut t, i, 2);
         }
         replays.push(create_replay_image(dir, "stripped", &t.images())?);
     }
