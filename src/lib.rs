@@ -15,6 +15,9 @@ pub use crate::image::*;
 pub use crate::io::*;
 pub use crate::tracer::*;
 
+use std::rc::Rc;
+use std::cell::RefCell;
+
 // Running example: 3x3 box filter
 
 /// 3x3 blur with no intermediate storage
@@ -22,15 +25,118 @@ pub fn blur3_inline(image: &GrayImage) -> GrayImage {
     let mut result = ImageBuffer::new(image.width(), image.height());
     for y in 1..image.height() - 1 {
         for x in 1..image.width() - 1 {
-            let mut temp = [0; 3];
-            temp[0] = (image.get(x - 1, y - 1) as u16 + image.get(x, y - 1) as u16 + image.get(x + 1, y - 1) as u16) / 3;
-            temp[1] = (image.get(x - 1, y) as u16 + image.get(x, y) as u16 + image.get(x + 1, y) as u16) / 3;
-            temp[2] = (image.get(x - 1, y + 1) as u16 + image.get(x, y + 1) as u16 + image.get(x + 1, y + 1) as u16) / 3;
-            let p = (temp[0] + temp[1] + temp[2]) / 3;
+            let t = (image.get(x - 1, y - 1) as u16 + image.get(x, y - 1) as u16 + image.get(x + 1, y - 1) as u16) / 3;
+            let m = (image.get(x - 1, y) as u16 + image.get(x, y) as u16 + image.get(x + 1, y) as u16) / 3;
+            let b = (image.get(x - 1, y + 1) as u16 + image.get(x, y + 1) as u16 + image.get(x + 1, y + 1) as u16) / 3;
+            let p = (t + m + b) / 3;
             result.set(x, y, p as u8);
         }
     }
     result
+}
+
+pub fn trace_blur3_inline<S: Storage>(storage: &mut S, image: Rc<RefCell<S::Image>>) -> Rc<RefCell<S::Image>> {
+    let image = image.borrow_mut();
+    let result_ref = storage.create_image(image.width(), image.height());
+
+    {
+        let mut result = result_ref.borrow_mut();
+
+        for y in 1..image.height() - 1 {
+            for x in 1..image.width() - 1 {
+                let t = (image.get(x - 1, y - 1) as u16 + image.get(x, y - 1) as u16 + image.get(x + 1, y - 1) as u16) / 3;
+                let m = (image.get(x - 1, y) as u16 + image.get(x, y) as u16 + image.get(x + 1, y) as u16) / 3;
+                let b = (image.get(x - 1, y + 1) as u16 + image.get(x, y + 1) as u16 + image.get(x + 1, y + 1) as u16) / 3;
+                let p = (t + m + b) / 3;
+                result.set(x, y, p as u8);
+            }
+        }
+    }
+
+    result_ref
+}
+
+pub fn trace_blur3_intermediate<S: Storage>(storage: &mut S, image: Rc<RefCell<S::Image>>) -> Rc<RefCell<S::Image>> {
+    let image = image.borrow_mut();
+    let (w, h) = image.dimensions();
+
+    let hblur_ref = storage.create_image(w, h);
+    let vblur_ref = storage.create_image(w, h);
+
+    {
+        let mut hblur = hblur_ref.borrow_mut();
+        let mut vblur = vblur_ref.borrow_mut();
+
+        for y in 0..h {
+            for x in 1..w - 1 {
+                hblur.set(x, y, ((image.get(x - 1, y) as u16 + image.get(x, y) as u16 + image.get(x + 1, y) as u16) / 3) as u8);
+            }
+        }
+        
+        for y in 1..h - 1 {
+            for x in 0..w {
+                vblur.set(x, y, ((hblur.get(x, y - 1) as u16 + hblur.get(x, y) as u16 + hblur.get(x, y + 1) as u16) / 3) as u8);
+            }
+        }
+    }
+
+    vblur_ref
+}
+
+pub fn trace_blur3_stripped<S: Storage>(storage: &mut S, image: Rc<RefCell<S::Image>>) -> Rc<RefCell<S::Image>> {
+    let image = image.borrow_mut();
+    let strip_height = 2;
+
+    assert!(image.height() % strip_height == 0);
+    let buffer_height = strip_height + 2;
+
+    let (w, h) = image.dimensions();
+
+    let strip_ref = storage.create_image(w, buffer_height);
+    let v_ref = storage.create_image(w, h);
+
+    {
+        let mut v = v_ref.borrow_mut();
+        let mut strip = strip_ref.borrow_mut();
+
+        for y_outer in 0..h / strip_height {
+            let y_offset = y_outer * strip_height;
+
+            strip.clear();
+
+            for y_buffer in 0..buffer_height {
+                if y_buffer + y_offset == 0 || y_buffer + y_offset > h {
+                    continue;
+                }
+                let y_image = y_buffer + y_offset - 1;
+                for x in 1..w - 1 {
+                    let p = (
+                        image.get(x - 1, y_image) as u16
+                        + image.get(x, y_image) as u16
+                        + image.get(x + 1, y_image) as u16
+                        ) / 3;
+                    strip.set(x, y_buffer, p as u8);
+                }
+            }
+
+            for y_inner in 0..strip_height {
+                if y_inner + y_offset == 0 || y_inner + y_offset == h - 1 {
+                    continue;
+                }
+                for x in 0..w {
+                    let y_buffer = y_inner + 1;
+                    let p = (
+                        strip.get(x, y_buffer - 1) as u16
+                        + strip.get(x, y_buffer) as u16
+                        + strip.get(x, y_buffer + 1) as u16
+                        ) / 3;
+                    v.set(x, y_inner + y_offset, p as u8);
+                }
+            }
+        }
+    }
+
+    v_ref
 }
 
 /// 3x3 blur where the horizontal blur is computed and stored before computing the vertical blur
@@ -134,7 +240,7 @@ mod tests {
         ($name:ident, $blur_function:ident) => {
             #[bench]
             fn $name(b: &mut Bencher) {
-                let i = black_box(image(64, 60));
+                let i = black_box(image(640, 900));
                 b.iter(|| black_box($blur_function(&i)));
             }
         };
@@ -148,6 +254,23 @@ mod tests {
             }
         }
     }
+
+    macro_rules! bench_blur3_trace {
+        ($name:ident, $blur_function:ident) => {
+            #[bench]
+            fn $name(b: &mut Bencher) {
+                let i = black_box(image(640, 900));
+                let mut s = BufferStore::new();
+                let i = s.create_from_image(&i);
+                b.iter(|| {
+                    s.clear();
+                    black_box($blur_function(&mut s, i.clone()))
+                });
+            }
+        };
+    }
+
+    bench_blur3_trace!(bench_trace_blur3_inline, trace_blur3_inline);
 
     fn blur3_split_y_5(image: &GrayImage) -> GrayImage {
         blur3_split_y(image, 5)

@@ -28,9 +28,45 @@ impl Zero for [u8; 3] {
 }
 
 pub trait Storage {
-    type Image;
+    type Image: Image<u8>;
     fn create_image(&mut self, width: usize, height: usize) -> Rc<RefCell<Self::Image>>;
     fn images(self) -> Vec<Self::Image>;
+}
+
+pub struct BufferStore {
+    store: Vec<Rc<RefCell<GrayImage>>>
+}
+
+impl BufferStore {
+    pub fn new() -> BufferStore {
+        BufferStore { store: vec![] }
+    }
+
+    pub fn create_from_image(&mut self, image: &GrayImage) -> Rc<RefCell<GrayImage>> {
+        self.add_image(image)
+    }
+
+    pub fn clear(&mut self) {
+        self.store.clear();
+    }
+
+    fn add_image(&mut self, image: &GrayImage) -> Rc<RefCell<GrayImage>> {
+        let image = Rc::new(RefCell::new(image.clone()));
+        self.store.push(image.clone());
+        image
+    }
+}
+
+impl Storage for BufferStore {
+    type Image = GrayImage;
+
+    fn create_image(&mut self, width: usize, height: usize) -> Rc<RefCell<GrayImage>> {
+        self.add_image(&GrayImage::new(width, height))
+    }
+
+    fn images(self) -> Vec<GrayImage> {
+        self.store.into_iter().map(|i| Rc::try_unwrap(i).unwrap().into_inner()).collect()
+    }
 }
 
 pub trait Image<T> {
@@ -44,7 +80,7 @@ pub trait Image<T> {
     fn get(&self, x: usize, y: usize) -> T;
     fn set(&mut self, x: usize, y: usize, c: T);
     fn clear(&mut self);
-    fn data(&self) -> &[T];    
+    fn data(&self) -> &[T];
 }
 
 /// For now we'll only consider greyscale images

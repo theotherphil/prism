@@ -67,6 +67,35 @@ pub struct TraceImage {
     trace: RefCell<Vec<Action>>
 }
 
+impl Image<u8> for TraceImage {
+    fn width(&self) -> usize {
+        self.initial_image.width()
+    }
+
+    fn height(&self) -> usize {
+        self.initial_image.height()
+    }
+
+    fn get(&self, x: usize, y: usize) -> u8 {
+        self.trace.borrow_mut().push(Action::Read(self.incr_count(), (x, y)));
+        self.current_image.get(x, y)
+    }
+
+    fn set(&mut self, x: usize, y: usize, c: u8) {
+        self.trace.borrow_mut().push(Action::Write(self.incr_count(), (x, y), c));
+        self.current_image.set(x, y, c);
+    }
+
+    fn clear(&mut self) {
+        self.trace.borrow_mut().push(Action::Clear(self.incr_count()));
+        self.current_image.clear();
+    }
+
+    fn data(&self) -> &[u8] {
+        self.current_image.data()
+    }
+}
+
 impl TraceImage {
     pub fn new(count: Rc<Cell<usize>>, width: usize, height: usize) -> TraceImage {
         Self::from_image(count, &GrayImage::new(width, height))
@@ -79,33 +108,6 @@ impl TraceImage {
             current_image: image.clone(),
             trace: RefCell::new(vec![])
         }
-    }
-
-    pub fn get(&self, x: usize, y: usize) -> u8 {
-        self.trace.borrow_mut().push(Action::Read(self.incr_count(), (x, y)));
-        self.current_image.get(x, y)
-    }
-
-    pub fn set(&mut self, x: usize, y: usize, c: u8) {
-        self.trace.borrow_mut().push(Action::Write(self.incr_count(), (x, y), c));
-        self.current_image.set(x, y, c);
-    }
-
-    pub fn clear(&mut self) {
-        self.trace.borrow_mut().push(Action::Clear(self.incr_count()));
-        self.current_image.clear();
-    }
-
-    pub fn width(&self) -> usize {
-        self.initial_image.width()
-    }
-
-    pub fn height(&self) -> usize {
-        self.initial_image.height()
-    }
-
-    pub fn dimensions(&self) -> (usize, usize) {
-        (self.width(), self.height())
     }
 
     fn incr_count(&self) -> usize {
