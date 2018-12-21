@@ -15,6 +15,15 @@ fn mean(a: u8, b: u8, c: u8) -> u8 {
     ((a as u16 + b as u16 + c as u16) / 3) as u8
 }
 
+macro_rules! continue_if_outside_range {
+    ($x:expr, $lower:expr, $upper:expr) => {
+        let (x, l, u) = ($x, $upper, $lower);
+        if x < l || x > u {
+            continue;
+        }
+    };
+}
+
 /// 3x3 blur with no intermediate storage
 pub fn blur3_inline<S: Storage>(storage: &mut S, image: Rc<RefCell<S::Image>>) -> Rc<RefCell<S::Image>> {
     let image = &*image.borrow();
@@ -90,9 +99,7 @@ fn blur3_split_y_impl<I: Image<u8>>(image: &I, strip: &mut I, v: &mut I, strip_h
         strip.clear();
 
         for y_buffer in 0..strip.height() {
-            if y_buffer + y_offset == 0 || y_buffer + y_offset > image.height() {
-                continue;
-            }
+            continue_if_outside_range!(y_buffer + y_offset, 1, image.height());
             let y_image = y_buffer + y_offset - 1;
             for x in 1..image.width() - 1 {
                 let p = mean(image.get(x - 1, y_image), image.get(x, y_image), image.get(x + 1, y_image));
@@ -101,9 +108,7 @@ fn blur3_split_y_impl<I: Image<u8>>(image: &I, strip: &mut I, v: &mut I, strip_h
         }
 
         for y_inner in 0..strip_height {
-            if y_inner + y_offset == 0 || y_inner + y_offset == image.height() - 1 {
-                continue;
-            }
+            continue_if_outside_range!(y_inner + y_offset, 1, image.height() - 2);
             let y_buffer = y_inner + 1;
 
             for x in 0..image.width() {
@@ -148,15 +153,11 @@ fn blur3_tiled_impl<I: Image<u8>>(image: &I, tile: &mut I, result: &mut I, tile_
 
             // Populate the tile with the horizontal blur
             for y_buffer in 0..tile.height() {
-                if y_buffer + y_offset == 0 || y_buffer + y_offset > image.height() {
-                    continue;
-                }
+                continue_if_outside_range!(y_buffer + y_offset, 1, image.height());
                 let y_image = y_buffer + y_offset - 1;
 
                 for x_buffer in 0..tile.width() {
-                    if x_buffer + x_offset == 0 || x_buffer + x_offset > image.width() {
-                        continue;
-                    }
+                    continue_if_outside_range!(x_buffer + x_offset, 1, image.width());
                     let x_image = x_buffer + x_offset;
 
                     let p = mean(
@@ -168,17 +169,12 @@ fn blur3_tiled_impl<I: Image<u8>>(image: &I, tile: &mut I, result: &mut I, tile_
 
             // Compute vertical blur using tile contents
             for y_inner in 0..tile_height {
-                if y_inner + y_offset == 0 || y_inner + y_offset == image.height() - 1 {
-                    continue;
-                }
+                continue_if_outside_range!(y_inner + y_offset, 1, image.height() - 2);
                 let y_buffer = y_inner + 1;
 
                 for x_inner in 0..tile_width {
-                    if x_inner + x_offset == 0 || x_inner + x_offset == image.width() - 1 {
-                        continue;
-                    }
+                    continue_if_outside_range!(x_inner + x_offset, 1, image.width() - 2);
                     let x_buffer = x_inner;
-
                     let p = mean(
                         tile.get(x_buffer, y_buffer - 1), tile.get(x_buffer, y_buffer), tile.get(x_buffer, y_buffer + 1)
                     );
