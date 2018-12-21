@@ -12,9 +12,9 @@ struct Opts {
     output_dir: PathBuf
 }
 
-fn trace_blur3_inline(dir: &PathBuf, tracer: &mut Tracer, image: &GrayImage) -> Vec<TraceImage> {
+fn trace_blur3_inline(tracer: &mut Tracer, image: &GrayImage) -> Vec<TraceImage> {
     let (w, h) = image.dimensions();
-    let mut image = tracer.create_from_image("input", image);
+    let image = tracer.create_from_image("input", image);
     let mut result = tracer.create_new("result", w, h);
 
     for y in 1..h - 1 {
@@ -30,9 +30,9 @@ fn trace_blur3_inline(dir: &PathBuf, tracer: &mut Tracer, image: &GrayImage) -> 
     vec![image, result]
 }
 
-fn trace_blur3_intermediate(dir: &PathBuf, tracer: &mut Tracer, image: &GrayImage) -> Vec<TraceImage> {
+fn trace_blur3_intermediate(tracer: &mut Tracer, image: &GrayImage) -> Vec<TraceImage> {
     let (w, h) = image.dimensions();
-    let mut image = tracer.create_from_image("input", image);
+    let image = tracer.create_from_image("input", image);
     
     let mut hblur = tracer.create_new("h", w, h);
     for y in 0..h {
@@ -50,14 +50,14 @@ fn trace_blur3_intermediate(dir: &PathBuf, tracer: &mut Tracer, image: &GrayImag
     vec![image, hblur, vblur]
 }
 
-fn trace_blur3_stripped(dir: &PathBuf, tracer: &mut Tracer, image: &GrayImage) -> Vec<TraceImage> {
+fn trace_blur3_stripped(tracer: &mut Tracer, image: &GrayImage) -> Vec<TraceImage> {
     let strip_height = 2;
 
     assert!(image.height() % strip_height == 0);
     let buffer_height = strip_height + 2;
 
     let (w, h) = image.dimensions();
-    let mut image = tracer.create_from_image("input", image);
+    let image = tracer.create_from_image("input", image);
 
     let mut v = tracer.create_new("v", w, h);
     let mut strip = tracer.create_new("s", w, buffer_height);
@@ -114,28 +114,41 @@ fn create_replay_image(dir: &PathBuf, name: &str, traces: &[TraceImage]) -> std:
     Ok(image_path)
 }
 
-fn main() -> std::io::Result<()> {
-    let opts = Opts::from_args();
-
-    let mut i = GrayImage::new(5, 6);
-    for y in 0..i.height() {
-        for x in 0..i.width() {
-            i[[x, y]] = (10 * (x % 10 + y % 10) as u8) + 50;
+fn create_gradient_image(width: usize, height: usize) -> GrayImage {
+    let mut image = GrayImage::new(width, height);
+    for y in 0..image.height() {
+        for x in 0..image.width() {
+            image[[x, y]] = (10 * (x % 10 + y % 10) as u8) + 50;
         }
     }
+    image
+}
 
+fn main() -> std::io::Result<()> {
+    let opts = Opts::from_args();
     let dir = &opts.output_dir;
 
-    let inline = trace_blur3_inline(dir, &mut Tracer::new(), &i);
-    let inline_replay = create_replay_image(dir, "inline", &inline)?;
+    let mut replays = vec![];
+    {
+        let mut t = Tracer::new();
+        let i = create_gradient_image(5, 6);
+        let inline = trace_blur3_inline(&mut t, &i);
+        replays.push(create_replay_image(dir, "inline", &inline)?);
+    }
+    {
+        let mut t = Tracer::new();
+        let i = create_gradient_image(5, 6);
+        let intermediate = trace_blur3_intermediate(&mut t, &i);
+        replays.push(create_replay_image(dir, "intermediate", &intermediate)?);
+    }
+    {
+        let mut t = Tracer::new();
+        let i = create_gradient_image(5, 6);
+        let stripped = trace_blur3_stripped(&mut t, &i);
+        replays.push(create_replay_image(dir, "stripped", &stripped)?);
+    }
 
-    let intermediate = trace_blur3_intermediate(dir, &mut Tracer::new(), &i);
-    let intermediate_replay = create_replay_image(dir, "intermediate", &intermediate)?;
-
-    let stripped = trace_blur3_stripped(dir, &mut Tracer::new(), &i);
-    let stripped_replay = create_replay_image(dir, "stripped", &stripped)?;
-
-    write_html_page(dir, "traces.html", &[inline_replay, intermediate_replay, stripped_replay])?;
+    write_html_page(dir, "traces.html", &replays)?;
 
     Ok(())
 }

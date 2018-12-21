@@ -31,9 +31,9 @@ impl Zero for [u8; 3] {
 // TODO: the initial segment of length width * height
 #[derive(Clone, PartialEq, Eq)]
 pub struct Image<T> {
-    pub width: usize,
-    pub height: usize,
-    pub buffer: Vec<T>
+    width: usize,
+    height: usize,
+    buffer: Vec<T>
 }
 
 pub type GrayImage = Image<u8>;
@@ -45,9 +45,20 @@ impl<T: Zero + Clone> Image<T> {
         let buffer = vec![T::zero(); width * height];
         Image { width, height, buffer }
     }
+
+    pub fn clear(&mut self) {
+        for e in &mut self.buffer {
+            *e = T::zero();
+        }
+    }
 }
 
 impl<T> Image<T> {
+    pub fn from_raw(width: usize, height: usize, buffer: Vec<T>) -> Image<T> {
+        assert!(buffer.len() >= width * height);
+        Image { width, height, buffer }
+    }
+
     pub fn width(&self) -> usize {
         self.width
     }
@@ -58,6 +69,10 @@ impl<T> Image<T> {
 
     pub fn dimensions(&self) -> (usize, usize) {
         (self.width, self.height)
+    }
+
+    pub fn data(&self) -> &[T] {
+        &self.buffer
     }
 }
 

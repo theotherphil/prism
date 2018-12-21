@@ -2,6 +2,7 @@ use crate::image::*;
 use crate::io::*;
 use std::rc::Rc;
 use std::cell::Cell;
+use std::cell::RefCell;
 
 /// Records the set of trace images, so that reads and writes can be ordered
 /// across multiple images.
@@ -16,11 +17,11 @@ impl Tracer {
         }
     }
 
-    pub fn create_new(&mut self, name: &'static str, width: usize, height: usize) -> TraceImage {
+    pub fn create_new(&mut self, _name: &'static str, width: usize, height: usize) -> TraceImage {
         TraceImage::new(self.count.clone(), width, height)
     }
 
-    pub fn create_from_image(&mut self, name: &'static str, image: &GrayImage) -> TraceImage {
+    pub fn create_from_image(&mut self, _name: &'static str, image: &GrayImage) -> TraceImage {
         TraceImage::from_image(self.count.clone(), image)
     }
 }
@@ -46,7 +47,7 @@ pub struct TraceImage {
     count: Rc<Cell<usize>>,
     initial_image: GrayImage,
     current_image: GrayImage,
-    trace: Vec<Action>
+    trace: RefCell<Vec<Action>>
 }
 
 impl TraceImage {
@@ -59,28 +60,35 @@ impl TraceImage {
             count: count,
             initial_image: image.clone(),
             current_image: image.clone(),
-            trace: vec![]
+            trace: RefCell::new(vec![])
         }
     }
 
-    pub fn get(&mut self, x: usize, y: usize) -> u8 {
-        self.trace.push(Action::Read(self.incr_count(), (x, y))); // reading requires mutable access... use a RefCell?
+    pub fn get(&self, x: usize, y: usize) -> u8 {
+        self.trace.borrow_mut().push(Action::Read(self.incr_count(), (x, y)));
         self.current_image[[x, y]]
     }
 
     pub fn set(&mut self, x: usize, y: usize, c: u8) {
-        self.trace.push(Action::Write(self.incr_count(), (x, y), c));
+        self.trace.borrow_mut().push(Action::Write(self.incr_count(), (x, y), c));
         self.current_image[[x, y]] = c;
     }
 
     pub fn clear(&mut self) {
-        self.trace.push(Action::Clear(self.incr_count()));
-        for e in &mut self.current_image.buffer {
-            *e = 0;
-        }
-        for e in &mut self.initial_image.buffer {
-            *e = 0;
-        }
+        self.trace.borrow_mut().push(Action::Clear(self.incr_count()));
+        self.current_image.clear();
+    }
+
+    pub fn width(&self) -> usize {
+        self.initial_image.width()
+    }
+
+    pub fn height(&self) -> usize {
+        self.initial_image.height()
+    }
+
+    pub fn dimensions(&self) -> (usize, usize) {
+        (self.width(), self.height())
     }
 
     fn incr_count(&self) -> usize {
@@ -110,7 +118,7 @@ pub fn replay(images: &[TraceImage]) -> Vec<RgbImage> {
     // Combine traces and label each action with the index of the image to which it applies
     let mut full_trace: Vec<(usize, Action)> = images.iter()
         .enumerate()
-        .flat_map(|(n, img)| img.trace.iter().map(move |t| (n, t.clone())))
+        .flat_map(|(n, img)| img.trace.borrow().iter().map(move |t| (n, t.clone())).collect::<Vec<_>>())
         .collect();
     full_trace.sort_by_key(|e| e.1.step_count());
 
