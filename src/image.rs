@@ -25,6 +25,20 @@ impl Zero for [u8; 3] {
     }
 }
 
+pub trait Image<T> {
+    fn width(&self) -> usize;
+    fn height(&self) -> usize;
+    
+    fn dimensions(&self) -> (usize, usize) {
+        (self.width(), self.height())
+    }
+
+    fn get(&self, x: usize, y: usize) -> T;
+    fn set(&mut self, x: usize, y: usize, c: T);
+    fn clear(&mut self);
+    fn data(&self) -> &[T];    
+}
+
 /// For now we'll only consider greyscale images
 // TODO: derived Eq checks for buffer equality, but we only care about
 // TODO: the initial segment of length width * height
@@ -33,6 +47,34 @@ pub struct ImageBuffer<T> {
     width: usize,
     height: usize,
     buffer: Vec<T>
+}
+
+impl<T: Zero + Copy + Clone> Image<T> for ImageBuffer<T> {
+    fn width(&self) -> usize {
+        self.width
+    }
+
+    fn height(&self) -> usize {
+        self.height
+    }
+
+    fn data(&self) -> &[T] {
+        &self.buffer
+    }
+
+    fn clear(&mut self) {
+        for e in &mut self.buffer {
+            *e = T::zero();
+        }
+    }
+
+    fn get(&self, x: usize, y: usize) -> T {
+        unsafe { *self.buffer.get_unchecked(y * self.width + x) }
+    }
+
+    fn set(&mut self, x: usize, y: usize, c: T) {
+        unsafe { *self.buffer.get_unchecked_mut(y * self.width + x) = c; }
+    }
 }
 
 pub type GrayImage = ImageBuffer<u8>;
@@ -45,47 +87,13 @@ impl<T: Zero + Clone> ImageBuffer<T> {
         ImageBuffer { width, height, buffer }
     }
 
-    pub fn clear(&mut self) {
-        for e in &mut self.buffer {
-            *e = T::zero();
-        }
-    }
-}
-
-impl<T> ImageBuffer<T> {
     pub fn from_raw(width: usize, height: usize, buffer: Vec<T>) -> ImageBuffer<T> {
         assert!(buffer.len() >= width * height);
         ImageBuffer { width, height, buffer }
     }
-
-    pub fn width(&self) -> usize {
-        self.width
-    }
-
-    pub fn height(&self) -> usize {
-        self.height
-    }
-
-    pub fn dimensions(&self) -> (usize, usize) {
-        (self.width, self.height)
-    }
-
-    pub fn data(&self) -> &[T] {
-        &self.buffer
-    }
 }
 
-impl <T: Copy> ImageBuffer<T> {
-    pub fn get(&self, x: usize, y: usize) -> T {
-        unsafe { *self.buffer.get_unchecked(y * self.width + x) }
-    }
-
-    pub fn set(&mut self, x: usize, y: usize, c: T) {
-        unsafe { *self.buffer.get_unchecked_mut(y * self.width + x) = c; }
-    }
-}
-
-impl<T: fmt::Debug + Copy> fmt::Debug for ImageBuffer<T> {
+impl<T: fmt::Debug + Zero + Copy + Clone> fmt::Debug for ImageBuffer<T> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         writeln!(f, "Image(width: {:?}, height: {:?}, buffer: {{", self.width, self.height)?;
         for y in 0..self.height() {
