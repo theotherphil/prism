@@ -44,11 +44,11 @@ fn trace_blur3_inline(dir: &PathBuf, tracer: &mut Tracer, image: &GrayImage) -> 
 
     for y in 1..h - 1 {
         for x in 1..w - 1 {
-            let t = (image.get(x - 1, y - 1) + image.get(x, y - 1) + image.get(x + 1, y - 1)) / 3;
-            let m = (image.get(x - 1, y) + image.get(x, y) + image.get(x + 1, y)) / 3;
-            let b = (image.get(x - 1, y + 1) + image.get(x, y + 1) + image.get(x + 1, y + 1)) / 3;
+            let t = (image.get(x - 1, y - 1) as u16 + image.get(x, y - 1) as u16 + image.get(x + 1, y - 1) as u16) / 3;
+            let m = (image.get(x - 1, y) as u16 + image.get(x, y) as u16 + image.get(x + 1, y) as u16) / 3;
+            let b = (image.get(x - 1, y + 1) as u16 + image.get(x, y + 1) as u16 + image.get(x + 1, y + 1) as u16) / 3;
             let p = (t + m + b) / 3;
-            result.set(x, y, p);
+            result.set(x, y, p as u8);
         }
     }
     
@@ -69,13 +69,13 @@ fn trace_blur3_intermediate(dir: &PathBuf, tracer: &mut Tracer, image: &GrayImag
     let mut hblur = tracer.create_new("h", w, h);
     for y in 0..h {
         for x in 1..w - 1 {
-            hblur.set(x, y, (image.get(x - 1, y) + image.get(x, y) + image.get(x + 1, y)) / 3);
+            hblur.set(x, y, ((image.get(x - 1, y) as u16 + image.get(x, y) as u16 + image.get(x + 1, y) as u16) / 3) as u8);
         }
     }
     let mut vblur = tracer.create_new("v", w, h);
     for y in 1..h - 1 {
         for x in 0..w {
-            vblur.set(x, y, (hblur.get(x, y - 1) + hblur.get(x, y) + hblur.get(x, y + 1)) / 3);
+            vblur.set(x, y, ((hblur.get(x, y - 1) as u16 + hblur.get(x, y) as u16 + hblur.get(x, y + 1) as u16) / 3) as u8);
         }
     }
 
