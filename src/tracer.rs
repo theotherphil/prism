@@ -1,7 +1,9 @@
-use crate::image::*;
-use crate::io::*;
+
 use std::rc::Rc;
 use std::cell::{Cell, RefCell};
+use crate::io::*;
+use crate::traits::*;
+use crate::buffer::*;
 
 /// Records the set of trace images, so that reads and writes can be ordered
 /// across multiple images.

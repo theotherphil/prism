@@ -5,15 +5,17 @@
 #![feature(test)]
 
 #[macro_use]
-pub mod image;
+pub mod buffer;
 pub mod io;
 pub mod tracer;
+pub mod traits;
 
 extern crate test;
 
-pub use crate::image::*;
+pub use crate::buffer::*;
 pub use crate::io::*;
 pub use crate::tracer::*;
+pub use crate::traits::*;
 
 use std::rc::Rc;
 use std::cell::RefCell;
