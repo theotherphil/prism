@@ -1,5 +1,7 @@
 
 use std::fmt;
+use std::rc::Rc;
+use std::cell::RefCell;
 
 pub trait Zero {
     fn zero() -> Self;
@@ -23,6 +25,12 @@ impl Zero for [u8; 3] {
     fn zero() -> [u8; 3] {
         [0, 0, 0]
     }
+}
+
+pub trait Storage {
+    type Image;
+    fn create_image(&mut self, name: &str, width: usize, height: usize) -> Rc<RefCell<Self::Image>>;
+    fn images(self) -> Vec<Self::Image>;
 }
 
 pub trait Image<T> {

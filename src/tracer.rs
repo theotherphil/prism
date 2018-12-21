@@ -1,28 +1,61 @@
 use crate::image::*;
 use crate::io::*;
 use std::rc::Rc;
-use std::cell::Cell;
-use std::cell::RefCell;
+use std::cell::{Cell, RefCell};
+use std::collections::HashMap;
 
 /// Records the set of trace images, so that reads and writes can be ordered
 /// across multiple images.
 pub struct Tracer {
-    count: Rc<Cell<usize>>
+    /// Counts the number of calls to get or set for any image produced by this Tracer.
+    count: Rc<Cell<usize>>,
+    store: HashMap<String, Rc<RefCell<TraceImage>>>,
+    /// Stored in insertion order, so that we can order the images in the rendered trace
+    names: Vec<String>
+}
+
+impl Storage for Tracer {
+    type Image = TraceImage;
+
+    fn create_image(&mut self, name: &str, width: usize, height: usize) -> Rc<RefCell<TraceImage>> {
+        self.add_image(name.to_string(), TraceImage::new(self.count.clone(), width, height))
+    }
+
+    fn images(mut self) -> Vec<TraceImage> {
+        let mut result = vec![];
+        for name in &self.names {
+            let image = match self.store.remove(name) {
+                Some(i) => {
+                    // There has to be a more sensible way of doing this...
+                    Rc::try_unwrap(i).unwrap().into_inner()
+                },
+                None => panic!("Broken invariant")
+            };
+            result.push(image)
+        }
+        result
+    }
 }
 
 impl Tracer {
     pub fn new() -> Tracer {
         Tracer {
-            count: Rc::new(Cell::new(0))
+            count: Rc::new(Cell::new(0)),
+            store: HashMap::new(),
+            names: vec![]
         }
     }
 
-    pub fn create_new(&mut self, _name: &'static str, width: usize, height: usize) -> TraceImage {
-        TraceImage::new(self.count.clone(), width, height)
+    pub fn create_from_image(&mut self, name: &str, image: &GrayImage) -> Rc<RefCell<TraceImage>> {
+        let image = TraceImage::from_image(self.count.clone(), image);
+        self.add_image(name.to_string(), image)
     }
 
-    pub fn create_from_image(&mut self, _name: &'static str, image: &GrayImage) -> TraceImage {
-        TraceImage::from_image(self.count.clone(), image)
+    fn add_image(&mut self, name: String, image: TraceImage) -> Rc<RefCell<TraceImage>> {
+        let image = Rc::new(RefCell::new(image));
+        self.store.insert(name.clone(), image.clone());
+        self.names.push(name);
+        image
     }
 }
 
@@ -43,6 +76,7 @@ impl Action {
     }
 }
 
+#[derive(Clone, PartialEq, Eq, Debug)]
 pub struct TraceImage {
     count: Rc<Cell<usize>>,
     initial_image: GrayImage,

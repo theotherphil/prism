@@ -3,6 +3,8 @@ use std::path::PathBuf;
 use std::fs::File;
 use std::io::Write;
 use structopt::StructOpt;
+use std::rc::Rc;
+use std::cell::RefCell;
 use prism::*;
 
 #[derive(StructOpt, Debug)]
@@ -12,85 +14,109 @@ struct Opts {
     output_dir: PathBuf
 }
 
-fn trace_blur3_inline(tracer: &mut Tracer, image: &GrayImage) -> Vec<TraceImage> {
+fn trace_blur3_inline(tracer: &mut Tracer, image: Rc<RefCell<TraceImage>>) -> Rc<RefCell<TraceImage>> {
+    let image = image.borrow_mut();
     let (w, h) = image.dimensions();
-    let image = tracer.create_from_image("input", image);
-    let mut result = tracer.create_new("result", w, h);
+    let result_ref = tracer.create_image("result", w, h);
 
-    for y in 1..h - 1 {
-        for x in 1..w - 1 {
-            let t = (image.get(x - 1, y - 1) as u16 + image.get(x, y - 1) as u16 + image.get(x + 1, y - 1) as u16) / 3;
-            let m = (image.get(x - 1, y) as u16 + image.get(x, y) as u16 + image.get(x + 1, y) as u16) / 3;
-            let b = (image.get(x - 1, y + 1) as u16 + image.get(x, y + 1) as u16 + image.get(x + 1, y + 1) as u16) / 3;
-            let p = (t + m + b) / 3;
-            result.set(x, y, p as u8);
+    {
+        let mut result = result_ref.borrow_mut();
+
+        for y in 1..h - 1 {
+            for x in 1..w - 1 {
+                let t = (image.get(x - 1, y - 1) as u16 + image.get(x, y - 1) as u16 + image.get(x + 1, y - 1) as u16) / 3;
+                let m = (image.get(x - 1, y) as u16 + image.get(x, y) as u16 + image.get(x + 1, y) as u16) / 3;
+                let b = (image.get(x - 1, y + 1) as u16 + image.get(x, y + 1) as u16 + image.get(x + 1, y + 1) as u16) / 3;
+                let p = (t + m + b) / 3;
+                result.set(x, y, p as u8);
+            }
         }
     }
-    
-    vec![image, result]
+
+    result_ref
 }
 
-fn trace_blur3_intermediate(tracer: &mut Tracer, image: &GrayImage) -> Vec<TraceImage> {
+fn trace_blur3_intermediate(tracer: &mut Tracer, image: Rc<RefCell<TraceImage>>) -> Rc<RefCell<TraceImage>> {
+    let image = image.borrow_mut();
     let (w, h) = image.dimensions();
-    let image = tracer.create_from_image("input", image);
-    
-    let mut hblur = tracer.create_new("h", w, h);
-    for y in 0..h {
-        for x in 1..w - 1 {
-            hblur.set(x, y, ((image.get(x - 1, y) as u16 + image.get(x, y) as u16 + image.get(x + 1, y) as u16) / 3) as u8);
+
+    let hblur_ref = tracer.create_image("h", w, h);
+    let vblur_ref = tracer.create_image("v", w, h);
+
+    {
+        let mut hblur = hblur_ref.borrow_mut();
+        let mut vblur = vblur_ref.borrow_mut();
+
+        for y in 0..h {
+            for x in 1..w - 1 {
+                hblur.set(x, y, ((image.get(x - 1, y) as u16 + image.get(x, y) as u16 + image.get(x + 1, y) as u16) / 3) as u8);
+            }
         }
-    }
-    let mut vblur = tracer.create_new("v", w, h);
-    for y in 1..h - 1 {
-        for x in 0..w {
-            vblur.set(x, y, ((hblur.get(x, y - 1) as u16 + hblur.get(x, y) as u16 + hblur.get(x, y + 1) as u16) / 3) as u8);
+        
+        for y in 1..h - 1 {
+            for x in 0..w {
+                vblur.set(x, y, ((hblur.get(x, y - 1) as u16 + hblur.get(x, y) as u16 + hblur.get(x, y + 1) as u16) / 3) as u8);
+            }
         }
     }
 
-    vec![image, hblur, vblur]
+    vblur_ref
 }
 
-fn trace_blur3_stripped(tracer: &mut Tracer, image: &GrayImage) -> Vec<TraceImage> {
+fn trace_blur3_stripped(tracer: &mut Tracer, image: Rc<RefCell<TraceImage>>) -> Rc<RefCell<TraceImage>> {
+    let image = image.borrow_mut();
     let strip_height = 2;
 
     assert!(image.height() % strip_height == 0);
     let buffer_height = strip_height + 2;
 
     let (w, h) = image.dimensions();
-    let image = tracer.create_from_image("input", image);
 
-    let mut v = tracer.create_new("v", w, h);
-    let mut strip = tracer.create_new("s", w, buffer_height);
+    let strip_ref = tracer.create_image("s", w, buffer_height);
+    let v_ref = tracer.create_image("v", w, h);
 
-    for y_outer in 0..h / strip_height {
-        let y_offset = y_outer * strip_height;
+    {
+        let mut v = v_ref.borrow_mut();
+        let mut strip = strip_ref.borrow_mut();
 
-        strip.clear();
+        for y_outer in 0..h / strip_height {
+            let y_offset = y_outer * strip_height;
 
-        for y_buffer in 0..buffer_height {
-            if y_buffer + y_offset == 0 || y_buffer + y_offset > h {
-                continue;
+            strip.clear();
+
+            for y_buffer in 0..buffer_height {
+                if y_buffer + y_offset == 0 || y_buffer + y_offset > h {
+                    continue;
+                }
+                let y_image = y_buffer + y_offset - 1;
+                for x in 1..w - 1 {
+                    let p = (
+                        image.get(x - 1, y_image) as u16
+                        + image.get(x, y_image) as u16
+                        + image.get(x + 1, y_image) as u16
+                        ) / 3;
+                    strip.set(x, y_buffer, p as u8);
+                }
             }
-            let y_image = y_buffer + y_offset - 1;
-            for x in 1..w - 1 {
-                let p = (image.get(x - 1, y_image) as u16 + image.get(x, y_image) as u16 + image.get(x + 1, y_image) as u16) / 3;
-                strip.set(x, y_buffer, p as u8);
-            }
-        }
 
-        for y_inner in 0..strip_height {
-            if y_inner + y_offset == 0 || y_inner + y_offset == h - 1 {
-                continue;
-            }
-            for x in 0..w {
-                let y_buffer = y_inner + 1;
-                let p = (strip.get(x, y_buffer - 1) as u16 + strip.get(x, y_buffer) as u16 + strip.get(x, y_buffer + 1) as u16) / 3;
-                v.set(x, y_inner + y_offset, p as u8);
+            for y_inner in 0..strip_height {
+                if y_inner + y_offset == 0 || y_inner + y_offset == h - 1 {
+                    continue;
+                }
+                for x in 0..w {
+                    let y_buffer = y_inner + 1;
+                    let p = (
+                        strip.get(x, y_buffer - 1) as u16
+                        + strip.get(x, y_buffer) as u16
+                        + strip.get(x, y_buffer + 1) as u16
+                        ) / 3;
+                    v.set(x, y_inner + y_offset, p as u8);
+                }
             }
         }
     }
 
-    vec![image, strip, v]
+    v_ref
 }
 
 fn write_html_page(dir: &PathBuf, path: &str, images: &[PathBuf]) -> std::io::Result<()> {
@@ -131,21 +157,30 @@ fn main() -> std::io::Result<()> {
     let mut replays = vec![];
     {
         let mut t = Tracer::new();
-        let i = create_gradient_image(5, 6);
-        let inline = trace_blur3_inline(&mut t, &i);
-        replays.push(create_replay_image(dir, "inline", &inline)?);
+        {
+            let i = create_gradient_image(5, 6);
+            let i = t.create_from_image("input", &i);
+            let _ = trace_blur3_inline(&mut t, i);
+        }
+        replays.push(create_replay_image(dir, "inline", &t.images())?);
     }
     {
         let mut t = Tracer::new();
-        let i = create_gradient_image(5, 6);
-        let intermediate = trace_blur3_intermediate(&mut t, &i);
-        replays.push(create_replay_image(dir, "intermediate", &intermediate)?);
+        {
+            let i = create_gradient_image(5, 6);
+            let i = t.create_from_image("input", &i);
+            let _ = trace_blur3_intermediate(&mut t, i);
+        }
+        replays.push(create_replay_image(dir, "intermediate", &t.images())?);
     }
     {
         let mut t = Tracer::new();
-        let i = create_gradient_image(5, 6);
-        let stripped = trace_blur3_stripped(&mut t, &i);
-        replays.push(create_replay_image(dir, "stripped", &stripped)?);
+        {
+            let i = create_gradient_image(5, 6);
+            let i = t.create_from_image("input", &i);
+            let _ = trace_blur3_stripped(&mut t, i);
+        }
+        replays.push(create_replay_image(dir, "stripped", &t.images())?);
     }
 
     write_html_page(dir, "traces.html", &replays)?;
