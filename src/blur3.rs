@@ -123,14 +123,17 @@ mod tests {
     use ::test::*;
     use crate::buffer::*;
 
-    fn image(width: usize, height: usize) -> GrayImage {
-        let mut i = GrayImage::new(width, height);
-        for y in 0..height {
-            for x in 0..width {
-                i.set(x, y, ((x + y) % 17) as u8);
+    fn image(storage: &mut BufferStore, width: usize, height: usize) -> Rc<RefCell<GrayImage>> {
+        let i_ref = storage.create_image(width, height);
+        {
+            let i = &mut *i_ref.borrow_mut();
+            for y in 0..height {
+                for x in 0..width {
+                    i.set(x, y, ((x + y) % 17) as u8);
+                }
             }
         }
-        i
+        black_box(i_ref)
     }
 
     fn blur3_reference<S: Storage>(storage: &mut S, image: Rc<RefCell<S::Image>>) -> Rc<RefCell<S::Image>> {
@@ -156,18 +159,10 @@ mod tests {
             paste::item! {
                 #[test]
                 fn [<test_ $blur_function>]() {
-                    let i = black_box(image(5, 10));
-
-                    let actual = {
-                        let mut s = BufferStore::new();
-                        let i = s.create_from_image(&i);
-                        $blur_function(&mut s, i)
-                    };
-                    let expected = {
-                        let mut s = BufferStore::new();
-                        let i = s.create_from_image(&i);
-                        blur3_reference(&mut s, i)
-                    };
+                    let mut s = BufferStore::new();
+                    let i = image(&mut s, 5, 10);
+                    let actual = $blur_function(&mut s, i.clone());
+                    let expected = blur3_reference(&mut s, i);
                     assert_eq!(&*actual.borrow(), &*expected.borrow());
                 }
             }
@@ -180,7 +175,7 @@ mod tests {
                 #[bench]
                 fn [<bench_ $blur_function>](b: &mut Bencher) {
                     let mut s = BufferStore::new();
-                    let i = s.create_from_image(&black_box(image(60, 60)));
+                    let i = image(&mut s, 60, 60);
                     b.iter(|| {
                         s.clear();
                         black_box($blur_function(&mut s, i.clone()))
