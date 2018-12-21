@@ -79,7 +79,55 @@ pub fn animation_rgb<I: AsRef<Path>>(images: &[RgbImage], delay_in_ms: u16, i: I
 
     for image in images {
         let mut pixels = flatten(&image.buffer);
+        // This call accounts for nearly all the time when creating tracing examples,
+        // and the rest of the code is already extremely slow.
+        // write_trace_animation avoids this by assuming a restricted range of input
+        // values and using a global palette 
         let mut frame = gif::Frame::from_rgb(w, h, &mut *pixels);
+        frame.delay = delay_in_ms / 10;
+        encoder.write_frame(&frame)?;
+    }
+
+    Ok(())
+}
+
+// Like animation_rgb, except that we assume the images are the outputs from tracing and so
+// only use the grayscale values 0 to 253, pure red and pure green
+pub fn write_trace_animation<I: AsRef<Path>>(images: &[RgbImage], delay_in_ms: u16, i: I) -> Result<()> {
+    use gif::SetParameter;
+
+    // Lazily assuming all images are the same size
+    assert!(!images.is_empty());
+
+    let mut global_palette = vec![];
+    for i in 0..254u8 {
+        global_palette.extend([i, i, i].iter().cloned());
+    }
+    global_palette.extend([255, 0, 0].iter().cloned());
+    global_palette.extend([0, 255, 0].iter().cloned());
+
+    let mut file = File::create(i.as_ref())?;
+    let (w, h) = (images[0].width as u16, images[0].height as u16);
+    let mut encoder = gif::Encoder::new(&mut file, w, h, &global_palette)?;
+    encoder.set(gif::Repeat::Infinite)?;
+
+    for image in images {
+        let mut pixels = Vec::with_capacity(image.width() * image.height());
+        for p in &image.buffer {
+            if p[0] == p[1] && p[1] == p[2] && p[0] < 254 {
+                pixels.push(p[0]);
+            }
+            else if *p == [255u8, 0, 0] {
+                pixels.push(254);
+            }
+            else if *p == [0, 255u8, 0] {
+                pixels.push(255);
+            }
+            else {
+                panic!("Invalid trace image RGB value {:?}", p);
+            }
+        }
+        let mut frame = gif::Frame::from_indexed_pixels(w, h, &pixels, None);
         frame.delay = delay_in_ms / 10;
         encoder.write_frame(&frame)?;
     }

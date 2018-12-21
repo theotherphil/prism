@@ -1,9 +1,7 @@
 
 use std::path::PathBuf;
-use std::rc::Rc;
 use std::fs::File;
 use std::io::Write;
-use std::cell::Cell;
 use structopt::StructOpt;
 use prism::*;
 
@@ -57,8 +55,8 @@ fn trace_blur3_inline(dir: &PathBuf, tracer: &mut Tracer, image: &GrayImage) -> 
     let image_path = dir.join("image.gif");
     let result_path = dir.join("result.gif");
 
-    animation_rgb(&replay(&image, 10), 100, &image_path)?;
-    animation_rgb(&replay(&result, 10), 900, &result_path)?;
+    write_trace_animation(&replay(&image, 10), 100, &image_path)?;
+    write_trace_animation(&replay(&result, 10), 900, &result_path)?;
 
     let mut html = File::create(dir.join("trace.html"))?;
     writeln!(html, "<html>")?;
@@ -92,9 +90,9 @@ fn trace_blur3_intermediate(dir: &PathBuf, tracer: &mut Tracer, image: &GrayImag
     let h_path = dir.join("h.gif");
     let v_path = dir.join("v.gif");
 
-    animation_rgb(&replay(&image, 10), 200, &image_path)?;
-    animation_rgb(&replay(&hblur, 10), 200, &h_path)?;
-    animation_rgb(&replay(&vblur, 10), 200, &v_path)?;
+    write_trace_animation(&replay(&image, 10), 200, &image_path)?;
+    write_trace_animation(&replay(&hblur, 10), 200, &h_path)?;
+    write_trace_animation(&replay(&vblur, 10), 200, &v_path)?;
 
     let mut html = File::create(dir.join("trace_i.html"))?;
     writeln!(html, "<html>")?;
