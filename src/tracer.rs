@@ -97,9 +97,9 @@ impl TraceImage {
     }
 }
 
-pub fn upscale<T: Copy + Zero>(image: &Image<T>, factor: u8) -> Image<T> {
+pub fn upscale<T: Copy + Zero>(image: &ImageBuffer<T>, factor: u8) -> ImageBuffer<T> {
     let (w, h) = (factor as usize * image.width(), factor as usize * image.height());
-    let mut result = Image::new(w, h);
+    let mut result = ImageBuffer::new(w, h);
     for y in 0..h {
         for x in 0..w {
             result.set(x, y, image.get(x / factor as usize, y / factor as usize));

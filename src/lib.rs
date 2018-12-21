@@ -19,7 +19,7 @@ pub use crate::tracer::*;
 
 /// 3x3 blur with no intermediate storage
 pub fn blur3_inline(image: &GrayImage) -> GrayImage {
-    let mut result = Image::new(image.width(), image.height());
+    let mut result = ImageBuffer::new(image.width(), image.height());
     for y in 1..image.height() - 1 {
         for x in 1..image.width() - 1 {
             let mut temp = [0; 3];
@@ -106,7 +106,7 @@ mod tests {
     }
 
     fn blur3_reference(image: &GrayImage) -> GrayImage {
-        let mut result = Image::new(image.width(), image.height());
+        let mut result = ImageBuffer::new(image.width(), image.height());
         for y in 1..image.height() - 1 {
             for x in 1..image.width() - 1 {
                 let t = (image.get(x - 1, y - 1) + image.get(x, y - 1) + image.get(x + 1, y - 1)) / 3;

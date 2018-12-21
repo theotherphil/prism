@@ -29,20 +29,20 @@ impl Zero for [u8; 3] {
 // TODO: derived Eq checks for buffer equality, but we only care about
 // TODO: the initial segment of length width * height
 #[derive(Clone, PartialEq, Eq)]
-pub struct Image<T> {
+pub struct ImageBuffer<T> {
     width: usize,
     height: usize,
     buffer: Vec<T>
 }
 
-pub type GrayImage = Image<u8>;
+pub type GrayImage = ImageBuffer<u8>;
 // This is a stupid representation, but it'll do for now
-pub type RgbImage = Image<[u8; 3]>;
+pub type RgbImage = ImageBuffer<[u8; 3]>;
 
-impl<T: Zero + Clone> Image<T> {
-    pub fn new(width: usize, height: usize) -> Image<T> {
+impl<T: Zero + Clone> ImageBuffer<T> {
+    pub fn new(width: usize, height: usize) -> ImageBuffer<T> {
         let buffer = vec![T::zero(); width * height];
-        Image { width, height, buffer }
+        ImageBuffer { width, height, buffer }
     }
 
     pub fn clear(&mut self) {
@@ -52,10 +52,10 @@ impl<T: Zero + Clone> Image<T> {
     }
 }
 
-impl<T> Image<T> {
-    pub fn from_raw(width: usize, height: usize, buffer: Vec<T>) -> Image<T> {
+impl<T> ImageBuffer<T> {
+    pub fn from_raw(width: usize, height: usize, buffer: Vec<T>) -> ImageBuffer<T> {
         assert!(buffer.len() >= width * height);
-        Image { width, height, buffer }
+        ImageBuffer { width, height, buffer }
     }
 
     pub fn width(&self) -> usize {
@@ -75,7 +75,7 @@ impl<T> Image<T> {
     }
 }
 
-impl <T: Copy> Image<T> {
+impl <T: Copy> ImageBuffer<T> {
     pub fn get(&self, x: usize, y: usize) -> T {
         unsafe { *self.buffer.get_unchecked(y * self.width + x) }
     }
@@ -85,7 +85,7 @@ impl <T: Copy> Image<T> {
     }
 }
 
-impl<T: fmt::Debug + Copy> fmt::Debug for Image<T> {
+impl<T: fmt::Debug + Copy> fmt::Debug for ImageBuffer<T> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         writeln!(f, "Image(width: {:?}, height: {:?}, buffer: {{", self.width, self.height)?;
         for y in 0..self.height() {
@@ -112,7 +112,7 @@ macro_rules! gray_image {
     // Empty image with the given channel type
     (type: $channel_type:ty) => {
         {
-            Image { width: 0, height: 0, buffer: vec![] }
+            ImageBuffer { width: 0, height: 0, buffer: vec![] }
         }
     };
     // Non-empty image of default channel type u8
@@ -131,7 +131,7 @@ macro_rules! gray_image {
                 .cloned()
                 .collect();
 
-            Image { width, height, buffer }
+            ImageBuffer { width, height, buffer }
         }
     }
 }
