@@ -31,6 +31,15 @@ pub enum Action {
     Write(usize, (usize, usize), u8)
 }
 
+impl Action {
+    fn step_count(&self) -> usize {
+        match self {
+            Action::Read(n, _) => *n,
+            Action::Write(n, _, _) => *n
+        }
+    }
+}
+
 pub struct TraceImage {
     count: Rc<Cell<usize>>,
     initial_image: GrayImage,
@@ -79,33 +88,103 @@ pub fn upscale<T: Copy + Zero>(image: &Image<T>, factor: u8) -> Image<T> {
     result
 }
 
-// This needs to return counts in order to sync multiple images
-// The flash for a read or write should occur on the count of the action
-pub fn replay(image: &TraceImage, scale_factor: u8) -> Vec<RgbImage> {
-    let mut current_image = gray_to_rgb(&image.initial_image);
+fn combine(images: &[RgbImage], layout: &Layout) -> RgbImage {
+    let mut result = RgbImage::new(layout.width, layout.height);
+
+    let background = [120, 120, 120];
+    for y in 0..result.height() {
+        for x in 0..result.width() {
+            result[[x, y]] = background;
+        }
+    }
+
+    for (n, image) in images.iter().enumerate() {
+        let offset = layout.offsets[n];
+        for y in 0..image.height() {
+            for x in 0..image.width() {
+                result[[x + offset.0, y + offset.1]] = image[[x, y]];
+            }
+        }
+    }
+    result
+}
+
+pub fn replay(images: &[TraceImage]) -> Vec<RgbImage> {
+    // Determine how to embed the individual images into a single combined image
+    let dimensions: Vec<(usize, usize)> = images.iter()
+        .map(|t| t.initial_image.dimensions())
+        .collect();
+    let layout = layout(&dimensions, 1);
+
+    // Combine traces and label each action with the index of the image to which it applies
+    let mut full_trace: Vec<(usize, Action)> = images.iter()
+        .enumerate()
+        .flat_map(|(n, img)| img.trace.iter().map(move |t| (n, t.clone())))
+        .collect();
+    full_trace.sort_by_key(|e| e.1.step_count());
+
+    // Arrange the initial images onto a single canvas
+    let initial_images: Vec<RgbImage> = images.iter()
+        .map(|i| gray_to_rgb(&i.initial_image))
+        .collect();
+    let mut current_image = combine(&initial_images, &layout);
 
     let mut frames = vec![];
-    frames.push(upscale(&current_image, scale_factor));
+    frames.push(current_image.clone());
 
-    for action in &image.trace {
+    for (image_index, action) in &full_trace {
+        let offset = layout.offsets[*image_index];
+
         match action {
-            Action::Read(_, (x, y)) => { 
-                let current = current_image[[*x, *y]];
-                current_image[[*x, *y]] = [0, 255, 0];
-                frames.push(upscale(&current_image, scale_factor));
+            Action::Read(_, (x, y)) => {
+                let x = *x + offset.0;
+                let y = *y + offset.1;
 
-                current_image[[*x, *y]] = current;
-                frames.push(upscale(&current_image, scale_factor));
+                let current = current_image[[x, y]];
+                current_image[[x, y]] = [0, 255, 0];
+                frames.push(current_image.clone());
+
+                current_image[[x, y]] = current;
+                frames.push(current_image.clone());
             },
             Action::Write(_, (x, y), c) => {
-                current_image[[*x, *y]] = [255, 0, 0];
-                frames.push(upscale(&current_image, scale_factor));
+                let x = *x + offset.0;
+                let y = *y + offset.1;
 
-                current_image[[*x, *y]] = [*c, *c, *c];
-                frames.push(upscale(&current_image, scale_factor));
+                current_image[[x, y]] = [255, 0, 0];
+                frames.push(current_image.clone());
+
+                current_image[[x, y]] = [*c, *c, *c];
+                frames.push(current_image.clone());
             }
         }
     }
 
     frames
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct Layout {
+    width: usize,
+    height: usize,
+    offsets: Vec<(usize, usize)>
+}
+
+// Given a series of trace images, create a new image to contain them all and a mapping
+// from locations in each image to the corresponding location in the combined image
+fn layout(dimensions: &[(usize, usize)], margin: usize) -> Layout {
+    assert!(dimensions.len() > 0);
+
+    let height = dimensions.iter().map(|d| d.1).max().unwrap() + 2 * margin;
+    let width = dimensions.iter().map(|d| d.0).sum::<usize>() + (dimensions.len() + 1) * margin;
+
+    let mut offsets = vec![(margin, margin)];
+    let mut left = 2 * margin + dimensions[0].0;
+
+    for d in dimensions.iter().skip(1) {
+        offsets.push((left, margin));
+        left += d.1 + margin;
+    }
+
+    Layout { width, height, offsets }
 }

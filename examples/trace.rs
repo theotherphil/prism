@@ -52,19 +52,12 @@ fn trace_blur3_inline(dir: &PathBuf, tracer: &mut Tracer, image: &GrayImage) -> 
         }
     }
     
+    let replay = replay(&[image, result]);
     let image_path = dir.join("image.gif");
-    let result_path = dir.join("result.gif");
+    let frames: Vec<RgbImage> = replay.iter().map(|i| upscale(&i, 10)).collect();
 
-    write_trace_animation(&replay(&image, 10), 100, &image_path)?;
-    write_trace_animation(&replay(&result, 10), 900, &result_path)?;
-
-    let mut html = File::create(dir.join("trace.html"))?;
-    writeln!(html, "<html>")?;
-    writeln!(html, "<body>")?;
-    writeln!(html, "<img src='{}'/>", image_path.to_string_lossy())?;
-    writeln!(html, "<img src='{}'/>", result_path.to_string_lossy())?;
-    writeln!(html, "</body>")?;
-    writeln!(html, "</html>")?;
+    write_trace_animation(&frames, 100, &image_path)?;
+    write_html_page(dir, "trace.html", &image_path)?;
 
     Ok(())
 }
@@ -87,53 +80,30 @@ fn trace_blur3_intermediate(dir: &PathBuf, tracer: &mut Tracer, image: &GrayImag
     }
 
     let image_path = dir.join("image_i.gif");
-    let h_path = dir.join("h.gif");
-    let v_path = dir.join("v.gif");
-
-    write_trace_animation(&replay(&image, 10), 200, &image_path)?;
-    write_trace_animation(&replay(&hblur, 10), 200, &h_path)?;
-    write_trace_animation(&replay(&vblur, 10), 200, &v_path)?;
-
-    let mut html = File::create(dir.join("trace_i.html"))?;
-    writeln!(html, "<html>")?;
-    writeln!(html, "<body>")?;
-    writeln!(html, "<img src='{}'/>", image_path.to_string_lossy())?;
-    writeln!(html, "<img src='{}'/>", h_path.to_string_lossy())?;
-    writeln!(html, "<img src='{}'/>", v_path.to_string_lossy())?;
-    writeln!(html, "</body>")?;
-    writeln!(html, "</html>")?;
+    let replay = replay(&[image, hblur, vblur]);
+    let frames: Vec<RgbImage> = replay.iter().map(|i| upscale(&i, 10)).collect();
+    write_trace_animation(&frames, 100, &image_path)?;
+    write_html_page(dir, "trace_i.html", &image_path)?;
 
     Ok(())
 }
 
-fn basic_trace(dir: &PathBuf) -> std::io::Result<()> {
-    let mut tracer = Tracer::new();
-    let (w, h) = (5, 5);
-    let mut r = tracer.create_new("in", w, h);
-    for y in 0..h {
-        for x in 0..w {
-            r.set(x, y, 20 * (x + y) as u8);
-            let _ = r.get(y, x);
-        }
-    }
-
-    let frames = replay(&r, 10);
-    animation_rgb(&frames, 100, dir.join("trace.gif"))?;
-
-    for a in &r.trace {
-        println!("ACTION {:?}", a);
-    }
-
+fn write_html_page(dir: &PathBuf, path: &str, image: &PathBuf) -> std::io::Result<()> {
+    let mut html = File::create(dir.join(path))?;
+    writeln!(html, "<html>")?;
+    writeln!(html, "<body>")?;
+    writeln!(html, "<img src='{}'/>", image.to_string_lossy())?;
+    writeln!(html, "</body>")?;
+    writeln!(html, "</html>")?;
     Ok(())
 }
 
 fn main() -> std::io::Result<()> {
     let opts = Opts::from_args();
 
-    //write_some_example_images(&opts.output_dir)?;
-    //basic_trace(&opts.output_dir)?;
+    write_some_example_images(&opts.output_dir)?;
 
-    let mut i = GrayImage::new(5, 5);
+    let mut i = GrayImage::new(4, 4);
     for y in 0..i.height() {
         for x in 0..i.width() {
             i[[x, y]] = 10 * (x % 10 + y % 10) as u8;
