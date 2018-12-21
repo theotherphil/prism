@@ -12,32 +12,7 @@ struct Opts {
     output_dir: PathBuf
 }
 
-fn write_some_example_images(dir: &PathBuf) -> std::io::Result<()> {
-    let mut i = GrayImage::new(50, 50);
-    for y in 0..i.height() {
-        for x in 0..i.width() {
-            i[[x, y]] = ((y / 10 + x / 10) * 20) as u8;
-        }
-    }
-
-    let mut f = GrayImage::new(50, 50);
-    for y in 0..i.height() {
-        for x in 0..i.width() {
-            f[[x, y]] = 255 - ((y / 10 + x / 10) * 20) as u8;
-        }
-    }
-
-    save_to_png(&i, dir.join("grad.png"))?;
-    save_to_gif(&i, dir.join("grad.gif"))?;
-    save_to_gif(&f, dir.join("grad_flip.gif"))?;
-    animation(&[i, f], 300, dir.join("animation.gif"))?;
-
-    Ok(())
-}
-
-// Maybe we should give up on using index syntax and create an interface based on get and set
-// so that we can write the algorithms once and have them work for both perf testing and tracing
-fn trace_blur3_inline(dir: &PathBuf, tracer: &mut Tracer, image: &GrayImage) -> std::io::Result<()> {
+fn trace_blur3_inline(dir: &PathBuf, tracer: &mut Tracer, image: &GrayImage) -> Vec<TraceImage> {
     let (w, h) = image.dimensions();
     let mut image = tracer.create_from_image("input", image);
     let mut result = tracer.create_new("result", w, h);
@@ -52,17 +27,10 @@ fn trace_blur3_inline(dir: &PathBuf, tracer: &mut Tracer, image: &GrayImage) -> 
         }
     }
     
-    let replay = replay(&[image, result]);
-    let image_path = dir.join("image.gif");
-    let frames: Vec<RgbImage> = replay.iter().map(|i| upscale(&i, 10)).collect();
-
-    write_trace_animation(&frames, 100, &image_path)?;
-    write_html_page(dir, "trace.html", &image_path)?;
-
-    Ok(())
+    vec![image, result]
 }
 
-fn trace_blur3_intermediate(dir: &PathBuf, tracer: &mut Tracer, image: &GrayImage) -> std::io::Result<()> {
+fn trace_blur3_intermediate(dir: &PathBuf, tracer: &mut Tracer, image: &GrayImage) -> Vec<TraceImage> {
     let (w, h) = image.dimensions();
     let mut image = tracer.create_from_image("input", image);
     
@@ -79,39 +47,95 @@ fn trace_blur3_intermediate(dir: &PathBuf, tracer: &mut Tracer, image: &GrayImag
         }
     }
 
-    let image_path = dir.join("image_i.gif");
-    let replay = replay(&[image, hblur, vblur]);
-    let frames: Vec<RgbImage> = replay.iter().map(|i| upscale(&i, 10)).collect();
-    write_trace_animation(&frames, 100, &image_path)?;
-    write_html_page(dir, "trace_i.html", &image_path)?;
-
-    Ok(())
+    vec![image, hblur, vblur]
 }
 
-fn write_html_page(dir: &PathBuf, path: &str, image: &PathBuf) -> std::io::Result<()> {
+fn trace_blur3_stripped(dir: &PathBuf, tracer: &mut Tracer, image: &GrayImage) -> Vec<TraceImage> {
+    let strip_height = 2;
+
+    assert!(image.height() % strip_height == 0);
+    let buffer_height = strip_height + 2;
+
+    let (w, h) = image.dimensions();
+    let mut image = tracer.create_from_image("input", image);
+
+    let mut v = tracer.create_new("v", w, h);
+    let mut strip = tracer.create_new("s", w, buffer_height);
+
+    for y_outer in 0..h / strip_height {
+        let y_offset = y_outer * strip_height;
+
+        strip.clear();
+
+        for y_buffer in 0..buffer_height {
+            if y_buffer + y_offset == 0 || y_buffer + y_offset > h {
+                continue;
+            }
+            let y_image = y_buffer + y_offset - 1;
+            for x in 1..w - 1 {
+                let p = (image.get(x - 1, y_image) as u16 + image.get(x, y_image) as u16 + image.get(x + 1, y_image) as u16) / 3;
+                strip.set(x, y_buffer, p as u8);
+            }
+        }
+
+        for y_inner in 0..strip_height {
+            if y_inner + y_offset == 0 || y_inner + y_offset == h - 1 {
+                continue;
+            }
+            for x in 0..w {
+                let y_buffer = y_inner + 1;
+                let p = (strip.get(x, y_buffer - 1) as u16 + strip.get(x, y_buffer) as u16 + strip.get(x, y_buffer + 1) as u16) / 3;
+                v.set(x, y_inner + y_offset, p as u8);
+            }
+        }
+    }
+
+    vec![image, strip, v]
+}
+
+fn write_html_page(dir: &PathBuf, path: &str, images: &[PathBuf]) -> std::io::Result<()> {
     let mut html = File::create(dir.join(path))?;
     writeln!(html, "<html>")?;
     writeln!(html, "<body>")?;
-    writeln!(html, "<img src='{}'/>", image.to_string_lossy())?;
+    for image in images {
+        writeln!(html, "<img src='{}'/>", image.to_string_lossy())?;
+        writeln!(html, "<br><br>")?;
+    }
     writeln!(html, "</body>")?;
     writeln!(html, "</html>")?;
     Ok(())
 }
 
+fn create_replay_image(dir: &PathBuf, name: &str, traces: &[TraceImage]) -> std::io::Result<PathBuf> {
+    let image_path = dir.join(name.to_owned() + ".gif");
+    let replay = replay(traces);
+    let frames: Vec<RgbImage> = replay.iter().map(|i| upscale(&i, 10)).collect();
+    write_trace_animation(&frames, 80, &image_path)?;
+    Ok(image_path)
+}
+
 fn main() -> std::io::Result<()> {
     let opts = Opts::from_args();
 
-    write_some_example_images(&opts.output_dir)?;
-
-    let mut i = GrayImage::new(4, 4);
+    let mut i = GrayImage::new(5, 6);
     for y in 0..i.height() {
         for x in 0..i.width() {
             i[[x, y]] = (10 * (x % 10 + y % 10) as u8) + 50;
         }
     }
 
-    trace_blur3_inline(&opts.output_dir, &mut Tracer::new(), &i)?;
-    trace_blur3_intermediate(&opts.output_dir, &mut Tracer::new(), &i)?;
+    let dir = &opts.output_dir;
+
+    let inline = trace_blur3_inline(dir, &mut Tracer::new(), &i);
+    let inline_replay = create_replay_image(dir, "inline", &inline)?;
+
+    let intermediate = trace_blur3_intermediate(dir, &mut Tracer::new(), &i);
+    let intermediate_replay = create_replay_image(dir, "intermediate", &intermediate)?;
+
+    let stripped = trace_blur3_stripped(dir, &mut Tracer::new(), &i);
+    let stripped_replay = create_replay_image(dir, "stripped", &stripped)?;
+
+    write_html_page(dir, "traces.html", &[inline_replay, intermediate_replay, stripped_replay])?;
 
     Ok(())
 }

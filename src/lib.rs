@@ -70,8 +70,8 @@ pub fn blur3_split_y(image: &GrayImage, strip_height: usize) -> GrayImage {
             }
             let y_image = y_buffer + y_offset - 1;
             for x in 1..image.width() - 1 {
-                strip[[x, y_buffer]] =
-                    ((image[[x - 1, y_image]] as u16 + image[[x, y_image]] as u16 + image[[x + 1, y_image]] as u16) / 3) as u8;
+                let p = (image[[x - 1, y_image]] as u16 + image[[x, y_image]] as u16 + image[[x + 1, y_image]] as u16) / 3;
+                strip[[x, y_buffer]] = p as u8;                 
             }
         }
 
@@ -81,8 +81,8 @@ pub fn blur3_split_y(image: &GrayImage, strip_height: usize) -> GrayImage {
             }
             for x in 0..image.width() {
                 let y_buffer = y_inner + 1;
-                v[[x, y_inner + y_offset]] =
-                    ((strip[[x, y_buffer - 1]] as u16 + strip[[x, y_buffer]] as u16 + strip[[x, y_buffer + 1]] as u16) / 3) as u8;
+                let p = (strip[[x, y_buffer - 1]] as u16 + strip[[x, y_buffer]] as u16 + strip[[x, y_buffer + 1]] as u16) / 3;
+                v[[x, y_inner + y_offset]] = p as u8;
             }
         }
     }
@@ -153,7 +153,12 @@ mod tests {
         blur3_split_y(image, 5)
     }
 
+    fn blur3_split_y_2(image: &GrayImage) -> GrayImage {
+        blur3_split_y(image, 2)
+    }
+
     bench_and_test_blur3!(blur3_inline);
     bench_and_test_blur3!(blur3_full_intermediate);
     bench_and_test_blur3!(blur3_split_y_5);
+    bench_and_test_blur3!(blur3_split_y_2);
 }

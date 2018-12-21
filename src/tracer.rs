@@ -28,14 +28,16 @@ impl Tracer {
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub enum Action {
     Read(usize, (usize, usize)),
-    Write(usize, (usize, usize), u8)
+    Write(usize, (usize, usize), u8),
+    Clear(usize)
 }
 
 impl Action {
     fn step_count(&self) -> usize {
         match self {
             Action::Read(n, _) => *n,
-            Action::Write(n, _, _) => *n
+            Action::Write(n, _, _) => *n,
+            Action::Clear(n) => *n
         }
     }
 }
@@ -44,7 +46,7 @@ pub struct TraceImage {
     count: Rc<Cell<usize>>,
     initial_image: GrayImage,
     current_image: GrayImage,
-    pub trace: Vec<Action>
+    trace: Vec<Action>
 }
 
 impl TraceImage {
@@ -71,7 +73,17 @@ impl TraceImage {
         self.current_image[[x, y]] = c;
     }
 
-    pub fn incr_count(&self) -> usize {
+    pub fn clear(&mut self) {
+        self.trace.push(Action::Clear(self.incr_count()));
+        for e in &mut self.current_image.buffer {
+            *e = 0;
+        }
+        for e in &mut self.initial_image.buffer {
+            *e = 0;
+        }
+    }
+
+    fn incr_count(&self) -> usize {
         (*self.count).set(self.count.get() + 1);
         self.count.get()
     }
@@ -83,27 +95,6 @@ pub fn upscale<T: Copy + Zero>(image: &Image<T>, factor: u8) -> Image<T> {
     for y in 0..h {
         for x in 0..w {
             result[[x, y]] = image[[x / factor as usize, y / factor as usize]];
-        }
-    }
-    result
-}
-
-fn combine(images: &[RgbImage], layout: &Layout) -> RgbImage {
-    let mut result = RgbImage::new(layout.width, layout.height);
-
-    let background = [120, 120, 120];
-    for y in 0..result.height() {
-        for x in 0..result.width() {
-            result[[x, y]] = background;
-        }
-    }
-
-    for (n, image) in images.iter().enumerate() {
-        let offset = layout.offsets[n];
-        for y in 0..image.height() {
-            for x in 0..image.width() {
-                result[[x + offset.0, y + offset.1]] = image[[x, y]];
-            }
         }
     }
     result
@@ -132,6 +123,10 @@ pub fn replay(images: &[TraceImage]) -> Vec<RgbImage> {
     let mut frames = vec![];
     frames.push(current_image.clone());
 
+    let red = [255, 0, 0];
+    let green = [0, 255, 0];
+    let black = [0, 0, 0];
+
     for (image_index, action) in &full_trace {
         let offset = layout.offsets[*image_index];
 
@@ -141,7 +136,7 @@ pub fn replay(images: &[TraceImage]) -> Vec<RgbImage> {
                 let y = *y + offset.1;
 
                 let current = current_image[[x, y]];
-                current_image[[x, y]] = [0, 255, 0];
+                current_image[[x, y]] = green;
                 frames.push(current_image.clone());
 
                 current_image[[x, y]] = current;
@@ -151,10 +146,26 @@ pub fn replay(images: &[TraceImage]) -> Vec<RgbImage> {
                 let x = *x + offset.0;
                 let y = *y + offset.1;
 
-                current_image[[x, y]] = [255, 0, 0];
+                current_image[[x, y]] = red;
                 frames.push(current_image.clone());
 
                 current_image[[x, y]] = [*c, *c, *c];
+                frames.push(current_image.clone());
+            },
+            Action::Clear(_) => {
+                let (w, h) = dimensions[*image_index];
+
+                for y in 0..h {
+                    for x in 0..w {
+                        current_image[[x + offset.0, y + offset.1]] = red;
+                    }
+                }
+                frames.push(current_image.clone());
+                for y in 0..h {
+                    for x in 0..w {
+                        current_image[[x + offset.0, y + offset.1]] = black;
+                    }
+                }
                 frames.push(current_image.clone());
             }
         }
@@ -183,8 +194,29 @@ fn layout(dimensions: &[(usize, usize)], margin: usize) -> Layout {
 
     for d in dimensions.iter().skip(1) {
         offsets.push((left, margin));
-        left += d.1 + margin;
+        left += d.0 + margin;
     }
 
     Layout { width, height, offsets }
+}
+
+fn combine(images: &[RgbImage], layout: &Layout) -> RgbImage {
+    let mut result = RgbImage::new(layout.width, layout.height);
+
+    let background = [120, 120, 120];
+    for y in 0..result.height() {
+        for x in 0..result.width() {
+            result[[x, y]] = background;
+        }
+    }
+
+    for (n, image) in images.iter().enumerate() {
+        let offset = layout.offsets[n];
+        for y in 0..image.height() {
+            for x in 0..image.width() {
+                result[[x + offset.0, y + offset.1]] = image[[x, y]];
+            }
+        }
+    }
+    result
 }
