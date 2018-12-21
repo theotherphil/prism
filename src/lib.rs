@@ -22,13 +22,12 @@ pub fn blur3_inline(image: &GrayImage) -> GrayImage {
     let mut result = Image::new(image.width(), image.height());
     for y in 1..image.height() - 1 {
         for x in 1..image.width() - 1 {
-            // Need to handle overflow and loss of precision better
             let mut temp = [0; 3];
-            temp[0] = (image[[x - 1, y - 1]] + image[[x, y - 1]] + image[[x + 1, y - 1]]) / 3;
-            temp[1] = (image[[x - 1, y]] + image[[x, y]] + image[[x + 1, y]]) / 3;
-            temp[2] = (image[[x - 1, y + 1]] + image[[x, y + 1]] + image[[x + 1, y + 1]]) / 3;
+            temp[0] = (image[[x - 1, y - 1]] as u16 + image[[x, y - 1]] as u16 + image[[x + 1, y - 1]] as u16) / 3;
+            temp[1] = (image[[x - 1, y]] as u16 + image[[x, y]] as u16 + image[[x + 1, y]] as u16) / 3;
+            temp[2] = (image[[x - 1, y + 1]] as u16 + image[[x, y + 1]] as u16 + image[[x + 1, y + 1]] as u16) / 3;
             let p = (temp[0] + temp[1] + temp[2]) / 3;
-            result[[x, y]] = p;
+            result[[x, y]] = p as u8;
         }
     }
     result
@@ -39,44 +38,51 @@ pub fn blur3_full_intermediate(image: &GrayImage) -> GrayImage {
     let mut h = GrayImage::new(image.width(), image.height());
     for y in 0..image.height() {
         for x in 1..image.width() - 1 {
-            h[[x, y]] = (image[[x - 1, y]] + image[[x, y]] + image[[x + 1, y]]) / 3;
+            h[[x, y]] = ((image[[x - 1, y]] as u16 + image[[x, y]] as u16 + image[[x + 1, y]] as u16) / 3) as u8;
         }
     }
     let mut v = GrayImage::new(image.width(), image.height());
     for y in 1..image.height() - 1 {
         for x in 0..image.width() {
-            v[[x, y]] = (h[[x, y - 1]] + h[[x, y]] + h[[x, y + 1]]) / 3;
+            v[[x, y]] = ((h[[x, y - 1]] as u16 + h[[x, y]] as u16 + h[[x, y + 1]] as u16) / 3) as u8;
         }
     }
     v
 }
 
-/// 3x3 blur where a 5 row slice is computed at a time, and each 5 row
-/// slice of the horizontal blur is computed before computing the corresponding
-/// section of the vertical blur
-pub fn blur3_split_y_5(image: &GrayImage) -> GrayImage {
-    const STRIP_HEIGHT: usize = 5;
-    assert!((image.height() - 2) % (STRIP_HEIGHT - 2) == 0); // consecutive strips have a two row overlap
+/// 3x3 blur where a strip of horizontal blur of height strip_height is computed and stored
+pub fn blur3_split_y(image: &GrayImage, strip_height: usize) -> GrayImage {
+    assert!(image.height() % strip_height == 0);
+    let buffer_height = strip_height + 2;
 
     let mut v = GrayImage::new(image.width(), image.height());
 
-    for yo in 0..(image.height() - 1) / (STRIP_HEIGHT - 2) {
-        let y_offset = yo * (STRIP_HEIGHT - 2);
+    for y_outer in 0..image.height() / strip_height {
+        let y_offset = y_outer * strip_height;
 
         // store "at yo", i.e. at the top of the yo loop body
-        let mut strip = GrayImage::new(image.width(), STRIP_HEIGHT);
+        let mut strip = GrayImage::new(image.width(), buffer_height);
 
         // Populate the whole strip's worth of horizontal blur before computing vertical blur
-        for yi in 0..STRIP_HEIGHT {
+        for y_buffer in 0..buffer_height {
+            if y_buffer + y_offset == 0 || y_buffer + y_offset > image.height() {
+                continue;
+            }
+            let y_image = y_buffer + y_offset - 1;
             for x in 1..image.width() - 1 {
-                let y = yi + y_offset;
-                strip[[x, yi]] = (image[[x - 1, y]] + image[[x, y]] + image[[x + 1, y]]) / 3;
+                strip[[x, y_buffer]] =
+                    ((image[[x - 1, y_image]] as u16 + image[[x, y_image]] as u16 + image[[x + 1, y_image]] as u16) / 3) as u8;
             }
         }
 
-        for yi in 1..STRIP_HEIGHT - 1 {
+        for y_inner in 0..strip_height {
+            if y_inner + y_offset == 0 || y_inner + y_offset == image.height() - 1 {
+                continue;
+            }
             for x in 0..image.width() {
-                v[[x, yi + y_offset]] = (strip[[x, yi - 1]] + strip[[x, yi]] + strip[[x, yi + 1]]) / 3;
+                let y_buffer = y_inner + 1;
+                v[[x, y_inner + y_offset]] =
+                    ((strip[[x, y_buffer - 1]] as u16 + strip[[x, y_buffer]] as u16 + strip[[x, y_buffer + 1]] as u16) / 3) as u8;
             }
         }
     }
@@ -116,7 +122,7 @@ mod tests {
         ($name:ident, $blur_function:ident) => {
             #[test]
             fn $name() {
-                let i = image(3, 11);
+                let i = image(3, 10);
                 let actual = $blur_function(&i);
                 let expected = blur3_reference(&i);
                 assert_eq!(actual, expected);
@@ -128,7 +134,7 @@ mod tests {
         ($name:ident, $blur_function:ident) => {
             #[bench]
             fn $name(b: &mut Bencher) {
-                let i = black_box(image(64, 62));
+                let i = black_box(image(64, 60));
                 b.iter(|| black_box($blur_function(&i)));
             }
         };
@@ -141,6 +147,10 @@ mod tests {
                 test_blur3!([<test_ $blur_function>], $blur_function);
             }
         }
+    }
+
+    fn blur3_split_y_5(image: &GrayImage) -> GrayImage {
+        blur3_split_y(image, 5)
     }
 
     bench_and_test_blur3!(blur3_inline);

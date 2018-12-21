@@ -65,13 +65,13 @@ impl<T> Index<[usize; 2]> for Image<T> {
     type Output = T;
 
     fn index(&self, index: [usize; 2]) -> &T {
-        &self.buffer[index[1] * self.width + index[0]]
+        unsafe { self.buffer.get_unchecked(index[1] * self.width + index[0]) }
     }
 }
 
 impl<T> IndexMut<[usize; 2]> for Image<T> {
     fn index_mut(&mut self, index: [usize; 2]) -> &mut T {
-        &mut self.buffer[index[1] * self.width + index[0]]
+        unsafe { self.buffer.get_unchecked_mut(index[1] * self.width + index[0]) }
     }
 }
 
@@ -99,7 +99,7 @@ macro_rules! gray_image {
     () => {
         gray_image!(type: u8)
     };
-        // Empty image with the given channel type
+    // Empty image with the given channel type
     (type: $channel_type:ty) => {
         {
             Image { width: 0, height: 0, buffer: vec![] }
