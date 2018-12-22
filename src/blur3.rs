@@ -27,6 +27,7 @@ pub fn blur3_inline<F: Factory>(factory: &mut F, image: &F::Image) -> F::Image {
 fn blur3_inline_impl<I: Image<u8>>(image: &I, result: &mut I) {
     for y in 1..image.height() - 1 {
         for x in 1..image.width() - 1 {
+            result.active(x, y, 1, 1);
             let t = mean(image.get(x - 1, y - 1), image.get(x, y - 1), image.get(x + 1, y - 1));
             let m = mean(image.get(x - 1, y), image.get(x, y), image.get(x + 1, y));
             let b = mean(image.get(x - 1, y + 1), image.get(x, y + 1), image.get(x + 1, y + 1));
@@ -45,6 +46,7 @@ pub fn blur3_intermediate<F: Factory>(factory: &mut F, image: &F::Image) -> F::I
 }
 
 fn blur3_full_intermediate_impl<I: Image<u8>>(image: &I, h: &mut I, v: &mut I) {
+    v.active(0, 0, image.width(), image.height());
     for y in 0..image.height() {
         for x in 1..image.width() - 1 {
             h.set(x, y, mean(image.get(x - 1, y), image.get(x, y), image.get(x + 1, y)));
@@ -70,6 +72,7 @@ fn blur3_split_y_impl<I: Image<u8>>(image: &I, strip: &mut I, v: &mut I, strip_h
     for y_outer in 0..image.height() / strip_height {
         let y_offset = y_outer * strip_height;
         strip.clear();
+        v.active(0, y_offset, image.width(), strip_height);
 
         for y_buffer in 0..strip.height() {
             continue_if_outside_range!(y_buffer + y_offset, 1, image.height());
@@ -117,6 +120,7 @@ fn blur3_tiled_impl<I: Image<u8>>(image: &I, tile: &mut I, result: &mut I, tile_
         for x_outer in 0..image.width() / tile_width {
             let x_offset = x_outer * tile_width;
             tile.clear();
+            result.active(x_offset, y_offset, tile_width, tile_height);
 
             // Populate the tile with the horizontal blur
             for y_buffer in 0..tile.height() {

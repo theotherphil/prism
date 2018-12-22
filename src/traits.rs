@@ -18,6 +18,10 @@ pub trait Image<T> {
     fn set(&mut self, x: usize, y: usize, c: T);
     fn clear(&mut self);
     fn data(&self) -> &[T];
+
+    /// Used solely to indicate the active area of the
+    /// output image to use when generating visualisations.
+    fn active(&self, x: usize, y: usize, width: usize, height: usize);
 }
 
 /// Any type with a "zero" value - used when initialising and clearing images

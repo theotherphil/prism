@@ -60,6 +60,10 @@ impl<T: Zero + Copy + Clone> Image<T> for ImageBuffer<T> {
     fn set(&mut self, x: usize, y: usize, c: T) {
         unsafe { *self.buffer.get_unchecked_mut(y * self.width + x) = c; }
     }
+
+    fn active(&self, _: usize, _: usize, _: usize, _: usize) {
+        // Do nothing
+    }
 }
 
 pub type GrayImage = ImageBuffer<u8>;
