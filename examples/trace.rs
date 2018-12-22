@@ -29,7 +29,8 @@ fn create_replay_image(dir: &PathBuf, name: &str, trace: &Trace) -> std::io::Res
     let image_path = dir.join(name.to_owned() + ".gif");
     let replay = replay(trace);
     let frames: Vec<RgbImage> = replay.iter().map(|i| upscale(&i, 10)).collect();
-    write_trace_animation(&frames, 60, &image_path)?;
+    let palette = create_gif_palette();
+    animation_rgb(&frames, 60, Some(&palette), &image_path)?;
     Ok(image_path)
 }
 

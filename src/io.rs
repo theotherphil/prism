@@ -1,6 +1,5 @@
 
 use crate::{GrayImage, RgbImage, Image};
-use crate::tracer::compute_tint;
 use std::{
     fs::File,
     io::{BufWriter, Result},
@@ -67,100 +66,59 @@ pub fn animation<I: AsRef<Path>>(images: &[GrayImage], delay_in_ms: u16, i: I) -
     Ok(())
 }
 
-pub fn animation_rgb<I: AsRef<Path>>(images: &[RgbImage], delay_in_ms: u16, i: I) -> Result<()> {
-    use gif::SetParameter;
-
-    // Lazily assuming all images are the same size
-    assert!(!images.is_empty());
-
-    let mut file = File::create(i.as_ref())?;
-    let (w, h) = (images[0].width() as u16, images[0].height() as u16);
-    let mut encoder = gif::Encoder::new(&mut file, w, h, &[])?;
-    encoder.set(gif::Repeat::Infinite)?;
-
-    for image in images {
-        let mut pixels = flatten(&image.data());
-        // This call accounts for nearly all the time when creating tracing examples,
-        // and the rest of the code is already extremely slow.
-        // write_trace_animation avoids this by assuming a restricted range of input
-        // values and using a global palette 
-        let mut frame = gif::Frame::from_rgb(w, h, &mut *pixels);
-        frame.delay = delay_in_ms / 10;
-        encoder.write_frame(&frame)?;
-    }
-
-    Ok(())
+pub struct GifPalette {
+    /// 256 RGB values
+    palette: Vec<u8>,
+    /// Converts raw RGB values into an index into
+    /// palette
+    index_calculator: Box<dyn Fn([u8; 3]) -> u8>,
 }
 
-// Like animation_rgb, except that we assume the images are the outputs from tracing and so
-// only use the grayscale values 0 to 253, pure red and pure green
-// TODO: This and the tracing code are tightly coupled - rewrite this to just support providing a
-// TODO: global palette and have the tracer code be responsible for providing the palette
-pub fn write_trace_animation<I: AsRef<Path>>(images: &[RgbImage], delay_in_ms: u16, i: I) -> Result<()> {
+impl GifPalette {
+    pub fn new(palette: &[u8], index_calculator: Box<dyn Fn([u8; 3]) -> u8>) -> GifPalette {
+        GifPalette {
+            palette: palette.iter().cloned().collect(),
+            index_calculator: index_calculator
+        }
+    }
+}
+
+pub fn animation_rgb<I: AsRef<Path>>(
+    images: &[RgbImage],
+    delay_in_ms: u16,
+    global_palette: Option<&GifPalette>,
+    i: I
+) -> Result<()> {
     use gif::SetParameter;
 
     // Lazily assuming all images are the same size
     assert!(!images.is_empty());
 
-    let mut global_palette = vec![];
-    // Greyscale pixels where each value has an even intensity no more than 250u8
-    for i in 0..126u8 {
-        global_palette.extend([2 * i, 2 * i, 2 * i].iter().cloned());
-    }
-    // Their blue-tinted equivalents
-    for i in 0..126u8 {
-        let tint = compute_tint(2 * i);
-        global_palette.extend([2 * i, 2 * i, 2 * i + tint].iter().cloned());
-    }
-    // Red, green, blue, yellow
-    global_palette.extend([255, 0, 0].iter().cloned());
-    global_palette.extend([0, 255, 0].iter().cloned());
-    global_palette.extend([0, 255, 255].iter().cloned());
-    global_palette.extend([255, 255, 0].iter().cloned());
-
     let mut file = File::create(i.as_ref())?;
     let (w, h) = (images[0].width() as u16, images[0].height() as u16);
-    let mut encoder = gif::Encoder::new(&mut file, w, h, &global_palette)?;
+
+    let mut encoder = if let Some(palette) = global_palette {
+        gif::Encoder::new(&mut file, w, h, &palette.palette)?
+    } else {
+        gif::Encoder::new(&mut file, w, h, &[])?
+    };
     encoder.set(gif::Repeat::Infinite)?;
 
-    let compute_palette_index = |p: [u8; 3]| {
-        if p == [255u8, 0, 0] {
-            252
-        }
-        else if p == [0, 255u8, 0] {
-            253
-        }
-        else if p == [0, 0, 255u8] {
-            254
-        }
-        else if p == [255u8, 255u8, 0] {
-            255
-        }
-        else if p[0] == p[1] && p[1] == p[2] && p[0] <= 250  {
-            // Round down to even values in each channel
-            p[0] / 2
-        }
-        else if p[0] == p[1] {
-            // Check if this is a blue-tinted version of an accepted greyscale value
-            let t = compute_tint(p[0]);
-            let b = p[0] + t;
-            if b == p[2] && p[0] <= 250 {
-                p[0] / 2 + 126
-            } else {
-                panic!("Invalid trace image RGB value {:?}", p)    
-            }
-        }
-        else {
-            panic!("Invalid trace image RGB value {:?}", p)
-        }
-    };
-
     for image in images {
-        let mut pixels = Vec::with_capacity(image.width() * image.height());
-        for p in image.data() {
-            pixels.push(compute_palette_index(*p));
-        }
-        let mut frame = gif::Frame::from_indexed_pixels(w, h, &pixels, None);
+        let mut frame = if let Some(ref palette) = global_palette {
+            let mut pixels = Vec::with_capacity(image.width() * image.height());
+            for p in image.data() {
+                pixels.push((palette.index_calculator)(*p));
+            }
+            gif::Frame::from_indexed_pixels(w, h, &pixels, None)
+
+        } else {
+            let mut pixels = flatten(&image.data());
+            // Frame::from_rgb is _extremely_ slow.
+            // Use a global palette where possible
+            gif::Frame::from_rgb(w, h, &mut *pixels)
+        };
+
         frame.delay = delay_in_ms / 10;
         encoder.write_frame(&frame)?;
     }

@@ -366,3 +366,57 @@ fn combine(images: &[RgbImage], layout: &Layout) -> RgbImage {
     }
     result
 }
+
+pub fn create_gif_palette() -> GifPalette {
+    let mut palette = vec![];
+    // Greyscale pixels where each value has an even intensity no more than 250u8
+    for i in 0..126u8 {
+        palette.extend([2 * i, 2 * i, 2 * i].iter().cloned());
+    }
+    // Their blue-tinted equivalents
+    for i in 0..126u8 {
+        let tint = compute_tint(2 * i);
+        palette.extend([2 * i, 2 * i, 2 * i + tint].iter().cloned());
+    }
+    // Red, green, blue, yellow
+    palette.extend([255, 0, 0].iter().cloned());
+    palette.extend([0, 255, 0].iter().cloned());
+    palette.extend([0, 255, 255].iter().cloned());
+    palette.extend([255, 255, 0].iter().cloned());
+
+    let compute_palette_index = |p: [u8; 3]| {
+        if p == [255u8, 0, 0] {
+            252
+        }
+        else if p == [0, 255u8, 0] {
+            253
+        }
+        else if p == [0, 0, 255u8] {
+            254
+        }
+        else if p == [255u8, 255u8, 0] {
+            255
+        }
+        else if p[0] == p[1] && p[1] == p[2] && p[0] <= 250  {
+            // Round down to even values in each channel
+            p[0] / 2
+        }
+        else if p[0] == p[1] {
+            // Check if this is a blue-tinted version of an accepted greyscale value
+            let t = compute_tint(p[0]);
+            let b = p[0] + t;
+            if b == p[2] && p[0] <= 250 {
+                p[0] / 2 + 126
+            } else {
+                panic!("Invalid trace image RGB value {:?}", p)
+            }
+        }
+        else {
+            panic!("Invalid trace image RGB value {:?}", p)
+        }
+    };
+
+    GifPalette::new(&palette, Box::new(compute_palette_index))
+}
+
+
