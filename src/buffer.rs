@@ -19,7 +19,6 @@ impl Factory for BufferFactory {
     }
 }
 
-/// For now we'll only consider greyscale images
 // TODO: derived Eq checks for buffer equality, but we only care about
 // TODO: the initial segment of length width * height
 #[derive(Clone, PartialEq, Eq)]
@@ -28,6 +27,10 @@ pub struct ImageBuffer<T> {
     height: usize,
     buffer: Vec<T>
 }
+
+pub type GrayImage = ImageBuffer<u8>;
+// This is a stupid representation, but it'll do for now
+pub type RgbImage = ImageBuffer<[u8; 3]>;
 
 impl<T: Zero + Copy + Clone> Image<T> for ImageBuffer<T> {
     #[inline]
@@ -65,10 +68,6 @@ impl<T: Zero + Copy + Clone> Image<T> for ImageBuffer<T> {
         // Do nothing
     }
 }
-
-pub type GrayImage = ImageBuffer<u8>;
-// This is a stupid representation, but it'll do for now
-pub type RgbImage = ImageBuffer<[u8; 3]>;
 
 impl<T: Zero + Clone> ImageBuffer<T> {
     pub fn new(width: usize, height: usize) -> ImageBuffer<T> {

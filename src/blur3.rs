@@ -20,11 +20,11 @@ macro_rules! continue_if_outside_range {
 /// 3x3 blur with no intermediate storage
 pub fn blur3_inline<F: Factory>(factory: &mut F, image: &F::Image) -> F::Image {
     let mut result = factory.create_image(image.width(), image.height());
-    blur3_inline_impl(image, &mut result);
+    blur3_inline_body(image, &mut result);
     result
 }
 
-fn blur3_inline_impl<I: Image<u8>>(image: &I, result: &mut I) {
+fn blur3_inline_body<I: Image<u8>>(image: &I, result: &mut I) {
     for y in 1..image.height() - 1 {
         for x in 1..image.width() - 1 {
             result.active(x, y, 1, 1);
@@ -41,11 +41,11 @@ fn blur3_inline_impl<I: Image<u8>>(image: &I, result: &mut I) {
 pub fn blur3_intermediate<F: Factory>(factory: &mut F, image: &F::Image) -> F::Image {
     let mut h = factory.create_image(image.width(), image.height());
     let mut v = factory.create_image(image.width(), image.height());
-    blur3_full_intermediate_impl(image, &mut h, &mut v);
+    blur3_intermediate_body(image, &mut h, &mut v);
     v
 }
 
-fn blur3_full_intermediate_impl<I: Image<u8>>(image: &I, h: &mut I, v: &mut I) {
+fn blur3_intermediate_body<I: Image<u8>>(image: &I, h: &mut I, v: &mut I) {
     v.active(0, 0, image.width(), image.height());
     for y in 0..image.height() {
         for x in 1..image.width() - 1 {
@@ -59,16 +59,43 @@ fn blur3_full_intermediate_impl<I: Image<u8>>(image: &I, h: &mut I, v: &mut I) {
     }
 }
 
+/// 3x3 blur where we allocate storage for the entire horizontal blur image, but consume
+/// these values as soon as they're created.
+pub fn blur3_local_intermediate<F: Factory>(factory: &mut F, image: &F::Image) -> F::Image {
+    assert!(image.height() > 2);
+    let mut h = factory.create_image(image.width(), image.height());
+    let mut v = factory.create_image(image.width(), image.height());
+    blur3_local_intermediate_body(image, &mut h, &mut v);
+    v
+}
+
+fn blur3_local_intermediate_body<I: Image<u8>>(image: &I, h: &mut I, v: &mut I) {
+    for x in 1..image.width() - 1 {
+        v.active(x, 1, 1, 1);
+        h.set(x, 0, mean(image.get(x - 1, 0), image.get(x, 0), image.get(x + 1, 0)));
+        h.set(x, 1, mean(image.get(x - 1, 1), image.get(x, 1), image.get(x + 1, 1)));
+        h.set(x, 2, mean(image.get(x - 1, 2), image.get(x, 2), image.get(x + 1, 2)));
+        v.set(x, 1, mean(h.get(x, 0), h.get(x, 1), h.get(x, 2)));
+    }
+    for y in 3..image.height() {
+        for x in 1..image.width() - 1 {
+            v.active(x, y - 1, 1, 1);
+            h.set(x, y, mean(image.get(x - 1, y), image.get(x, y), image.get(x + 1, y)));
+            v.set(x, y - 1, mean(h.get(x, y - 2), h.get(x, y - 1), h.get(x, y)));
+        }
+    }
+}
+
 /// 3x3 blur where a strip of horizontal blur of height strip_height is computed and stored
 pub fn blur3_split_y<F: Factory>(factory: &mut F, image: &F::Image, strip_height: usize) -> F::Image {
     assert!(image.height() % strip_height == 0);
     let mut strip = factory.create_image(image.width(), strip_height + 2);
     let mut v = factory.create_image(image.width(), image.height());
-    blur3_split_y_impl(image, &mut strip, &mut v, strip_height);
+    blur3_split_y_body(image, &mut strip, &mut v, strip_height);
     v
 }
 
-fn blur3_split_y_impl<I: Image<u8>>(image: &I, strip: &mut I, v: &mut I, strip_height: usize) {
+fn blur3_split_y_body<I: Image<u8>>(image: &I, strip: &mut I, v: &mut I, strip_height: usize) {
     for y_outer in 0..image.height() / strip_height {
         let y_offset = y_outer * strip_height;
         strip.clear();
@@ -106,12 +133,12 @@ pub fn blur3_tiled<F: Factory>(
     assert!(image.height() % tile_height == 0);
     let mut tile = factory.create_image(tile_width, tile_height + 2);
     let mut result = factory.create_image(image.width(), image.height());
-    blur3_tiled_impl(image, &mut tile, &mut result, tile_width, tile_height);
+    blur3_tiled_body(image, &mut tile, &mut result, tile_width, tile_height);
     result
 }
 
 // The bounds checking here is awful. Need to do something more sensible
-fn blur3_tiled_impl<I: Image<u8>>(image: &I, tile: &mut I, result: &mut I, tile_width: usize, tile_height: usize) {
+fn blur3_tiled_body<I: Image<u8>>(image: &I, tile: &mut I, result: &mut I, tile_width: usize, tile_height: usize) {
     // tile height is tile_height
     // tile width is tile_width + 2
     for y_outer in 0..image.height() / tile_height {
@@ -208,7 +235,7 @@ mod tests {
                 #[bench]
                 fn [<bench_ $blur_function>](b: &mut Bencher) {
                     let mut f = BufferFactory::new();
-                    let i = image(60, 60);
+                    let i = image(180, 180);
                     b.iter(|| {
                         black_box($blur_function(&mut f, &i))
                     });
@@ -238,6 +265,7 @@ mod tests {
 
     bench_and_test_blur3!(blur3_inline);
     bench_and_test_blur3!(blur3_intermediate);
+    bench_and_test_blur3!(blur3_local_intermediate);
     bench_and_test_blur3!(blur3_split_y_5);
     bench_and_test_blur3!(blur3_split_y_2);
     bench_and_test_blur3!(blur3_tiled_5);

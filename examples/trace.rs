@@ -61,6 +61,7 @@ fn main() -> std::io::Result<()> {
     let replays = vec![
         visualise(dir, "inline", &gradient_image(5, 6), |t, i| blur3_inline(t, i), 60)?,
         visualise(dir, "intermediate", &gradient_image(5, 6), |t, i| blur3_intermediate(t, i), 60)?,
+        visualise(dir, "local_intermediate", &gradient_image(5, 6), |t, i| blur3_local_intermediate(t, i), 60)?,
         visualise(dir, "stripped", &gradient_image(5, 6), |t, i| blur3_split_y(t, i, 2), 60)?,
         visualise(dir, "tiled", &gradient_image(9, 6), |t, i| blur3_tiled(t, i, 3, 3), 20)?,
     ];
