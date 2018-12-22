@@ -1,13 +1,9 @@
 
-use std::rc::Rc;
-use std::cell::RefCell;
-
-/// Allocates images. This trait exists solely so that we can track
-/// all allocated images when producing tracing visualisations.
-pub trait Storage {
+/// Allocates images. This trait exists solely to allow us to trace reads and writes
+/// to all images when creating visualisations.
+pub trait Factory {
     type Image: Image<u8>;
-    fn create_image(&mut self, width: usize, height: usize) -> Rc<RefCell<Self::Image>>;
-    fn images(self) -> Vec<Self::Image>;
+    fn create_image(&mut self, width: usize, height: usize) -> Self::Image;
 }
 
 pub trait Image<T> {

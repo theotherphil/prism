@@ -1,43 +1,21 @@
 
 use std::fmt;
-use std::rc::Rc;
-use std::cell::RefCell;
-
 use crate::traits::*;
 
-pub struct BufferStore {
-    store: Vec<Rc<RefCell<GrayImage>>>
-}
+/// Trivial factory that just calls GrayImage::new
+pub struct BufferFactory {}
 
-impl BufferStore {
-    pub fn new() -> BufferStore {
-        BufferStore { store: vec![] }
-    }
-
-    pub fn create_from_image(&mut self, image: &GrayImage) -> Rc<RefCell<GrayImage>> {
-        self.add_image(image.clone())
-    }
-
-    pub fn clear(&mut self) {
-        self.store.clear();
-    }
-
-    fn add_image(&mut self, image: GrayImage) -> Rc<RefCell<GrayImage>> {
-        let image = Rc::new(RefCell::new(image));
-        self.store.push(image.clone());
-        image
+impl BufferFactory {
+    pub fn new() -> BufferFactory {
+        BufferFactory { }
     }
 }
 
-impl Storage for BufferStore {
+impl Factory for BufferFactory {
     type Image = GrayImage;
 
-    fn create_image(&mut self, width: usize, height: usize) -> Rc<RefCell<GrayImage>> {
-        self.add_image(GrayImage::new(width, height))
-    }
-
-    fn images(self) -> Vec<GrayImage> {
-        self.store.into_iter().map(|i| Rc::try_unwrap(i).unwrap().into_inner()).collect()
+    fn create_image(&mut self, width: usize, height: usize) -> GrayImage {
+        GrayImage::new(width, height)
     }
 }
 

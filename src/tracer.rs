@@ -1,120 +1,124 @@
 
 use std::rc::Rc;
-use std::cell::{Cell, RefCell};
+use std::cell::RefCell;
 use crate::io::*;
 use crate::traits::*;
 use crate::buffer::*;
 
-/// Records the set of trace images, so that reads and writes can be ordered
-/// across multiple images.
 pub struct Tracer {
-    /// Counts the number of calls to get or set for any image produced by this Tracer.
-    count: Rc<Cell<usize>>,
-    store: Vec<Rc<RefCell<TraceImage>>>
+    pub trace: Rc<Trace>
 }
 
-impl Storage for Tracer {
+impl Factory for Tracer {
     type Image = TraceImage;
 
-    fn create_image(&mut self, width: usize, height: usize) -> Rc<RefCell<TraceImage>> {
-        self.add_image(TraceImage::new(self.count.clone(), width, height))
-    }
-
-    fn images(self) -> Vec<TraceImage> {
-        self.store.into_iter().map(|i| Rc::try_unwrap(i).unwrap().into_inner()).collect()
+    fn create_image(&mut self, width: usize, height: usize) -> TraceImage {
+        TraceImage::new(self.trace.clone(), width, height)
     }
 }
 
 impl Tracer {
     pub fn new() -> Tracer {
         Tracer {
-            count: Rc::new(Cell::new(0)),
-            store: vec![]
+            trace: Rc::new(Trace::new())
         }
     }
 
-    pub fn create_from_image(&mut self, image: &GrayImage) -> Rc<RefCell<TraceImage>> {
-        self.add_image(TraceImage::from_image(self.count.clone(), image))
-    }
-
-    fn add_image(&mut self, image: TraceImage) -> Rc<RefCell<TraceImage>> {
-        let image = Rc::new(RefCell::new(image));
-        self.store.push(image.clone());
-        image
+    pub fn create_from_image(&mut self, image: &GrayImage) -> TraceImage {
+        TraceImage::from_image(self.trace.clone(), image)
     }
 }
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub enum Action {
-    Read(usize, (usize, usize)),
-    Write(usize, (usize, usize), u8),
-    Clear(usize)
+    Read(TraceId, (usize, usize)),
+    Write(TraceId, (usize, usize), u8),
+    Clear(TraceId)
 }
 
-impl Action {
-    fn step_count(&self) -> usize {
-        match self {
-            Action::Read(n, _) => *n,
-            Action::Write(n, _, _) => *n,
-            Action::Clear(n) => *n
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+pub struct TraceId(usize);
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Trace {
+    actions: RefCell<Vec<Action>>,
+    initial_images: RefCell<Vec<GrayImage>>
+}
+
+impl Trace {
+    fn new() -> Trace {
+        Trace {
+            actions: RefCell::new(vec![]),
+            initial_images: RefCell::new(vec![])
         }
+    }
+
+    pub fn create_trace_id(&self, initial_image: &GrayImage) -> TraceId {
+        let id = TraceId(self.initial_images.borrow().len());
+        self.initial_images.borrow_mut().push(initial_image.clone());
+        id
+    }
+
+    pub fn trace_get(&self, id: TraceId, x: usize, y: usize) {
+        self.actions.borrow_mut().push(Action::Read(id, (x, y)));
+    }
+
+    pub fn trace_set(&self, id: TraceId, x: usize, y: usize, c: u8) {
+        self.actions.borrow_mut().push(Action::Write(id, (x, y), c));
+    }
+
+    pub fn trace_clear(&self, id: TraceId) {
+        self.actions.borrow_mut().push(Action::Clear(id));
     }
 }
 
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub struct TraceImage {
-    count: Rc<Cell<usize>>,
-    initial_image: GrayImage,
-    current_image: GrayImage,
-    trace: RefCell<Vec<Action>>
+    image: GrayImage,
+    trace_id: TraceId,
+    trace: Rc<Trace>
 }
 
 impl Image<u8> for TraceImage {
     fn width(&self) -> usize {
-        self.initial_image.width()
+        self.image.width()
     }
 
     fn height(&self) -> usize {
-        self.initial_image.height()
+        self.image.height()
     }
 
     fn get(&self, x: usize, y: usize) -> u8 {
-        self.trace.borrow_mut().push(Action::Read(self.incr_count(), (x, y)));
-        self.current_image.get(x, y)
+        self.trace.trace_get(self.trace_id, x, y);
+        self.image.get(x, y)
     }
 
     fn set(&mut self, x: usize, y: usize, c: u8) {
-        self.trace.borrow_mut().push(Action::Write(self.incr_count(), (x, y), c));
-        self.current_image.set(x, y, c);
+        self.trace.trace_set(self.trace_id, x, y, c);
+        self.image.set(x, y, c);
     }
 
     fn clear(&mut self) {
-        self.trace.borrow_mut().push(Action::Clear(self.incr_count()));
-        self.current_image.clear();
+        self.trace.trace_clear(self.trace_id);
+        self.image.clear();
     }
 
     fn data(&self) -> &[u8] {
-        self.current_image.data()
+        self.image.data()
     }
 }
 
 impl TraceImage {
-    pub fn new(count: Rc<Cell<usize>>, width: usize, height: usize) -> TraceImage {
-        Self::from_image(count, &GrayImage::new(width, height))
+    pub fn new(trace: Rc<Trace>, width: usize, height: usize) -> TraceImage {
+        Self::from_image(trace, &GrayImage::new(width, height))
     }
 
-    pub fn from_image(count: Rc<Cell<usize>>, image: &GrayImage) -> TraceImage {
+    pub fn from_image(trace: Rc<Trace>, image: &GrayImage) -> TraceImage {
         TraceImage {
-            count: count,
-            initial_image: image.clone(),
-            current_image: image.clone(),
-            trace: RefCell::new(vec![])
+            image: image.clone(),
+            trace_id: trace.create_trace_id(image),
+            trace: trace.clone()
         }
-    }
-
-    fn incr_count(&self) -> usize {
-        (*self.count).set(self.count.get() + 1);
-        self.count.get()
     }
 }
 
@@ -129,24 +133,23 @@ pub fn upscale<T: Copy + Zero>(image: &ImageBuffer<T>, factor: u8) -> ImageBuffe
     result
 }
 
-pub fn replay(images: &[TraceImage]) -> Vec<RgbImage> {
+pub fn replay(trace: &Trace) -> Vec<RgbImage> {
     // Determine how to embed the individual images into a single combined image
-    let dimensions: Vec<(usize, usize)> = images.iter()
-        .map(|t| t.initial_image.dimensions())
+    let dimensions: Vec<(usize, usize)> = trace.initial_images
+        .borrow()
+        .iter()
+        .map(|i| i.dimensions())
         .collect();
+    
     let layout = layout(&dimensions, 1);
 
-    // Combine traces and label each action with the index of the image to which it applies
-    let mut full_trace: Vec<(usize, Action)> = images.iter()
-        .enumerate()
-        .flat_map(|(n, img)| img.trace.borrow().iter().map(move |t| (n, t.clone())).collect::<Vec<_>>())
-        .collect();
-    full_trace.sort_by_key(|e| e.1.step_count());
-
     // Arrange the initial images onto a single canvas
-    let initial_images: Vec<RgbImage> = images.iter()
-        .map(|i| gray_to_rgb(&i.initial_image))
+    let initial_images: Vec<RgbImage> = trace.initial_images
+        .borrow()
+        .iter()
+        .map(|i| gray_to_rgb(i))
         .collect();
+
     let mut current_image = combine(&initial_images, &layout);
 
     let mut frames = vec![];
@@ -156,11 +159,10 @@ pub fn replay(images: &[TraceImage]) -> Vec<RgbImage> {
     let green = [0, 255, 0];
     let black = [0, 0, 0];
 
-    for (image_index, action) in &full_trace {
-        let offset = layout.offsets[*image_index];
-
+    for action in trace.actions.borrow().iter() {
         match action {
-            Action::Read(_, (x, y)) => {
+            Action::Read(id, (x, y)) => {
+                let offset = layout.offsets[id.0];
                 let x = *x + offset.0;
                 let y = *y + offset.1;
 
@@ -171,7 +173,8 @@ pub fn replay(images: &[TraceImage]) -> Vec<RgbImage> {
                 current_image.set(x, y, current);
                 frames.push(current_image.clone());
             },
-            Action::Write(_, (x, y), c) => {
+            Action::Write(id, (x, y), c) => {
+                let offset = layout.offsets[id.0];
                 let x = *x + offset.0;
                 let y = *y + offset.1;
 
@@ -181,8 +184,9 @@ pub fn replay(images: &[TraceImage]) -> Vec<RgbImage> {
                 current_image.set(x, y, [*c, *c, *c]);
                 frames.push(current_image.clone());
             },
-            Action::Clear(_) => {
-                let (w, h) = dimensions[*image_index];
+            Action::Clear(id) => {
+                let offset = layout.offsets[id.0];
+                let (w, h) = dimensions[id.0];
 
                 for y in 0..h {
                     for x in 0..w {

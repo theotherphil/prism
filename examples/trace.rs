@@ -25,9 +25,9 @@ fn write_html_page(dir: &PathBuf, path: &str, images: &[PathBuf]) -> std::io::Re
     Ok(())
 }
 
-fn create_replay_image(dir: &PathBuf, name: &str, traces: &[TraceImage]) -> std::io::Result<PathBuf> {
+fn create_replay_image(dir: &PathBuf, name: &str, trace: &Trace) -> std::io::Result<PathBuf> {
     let image_path = dir.join(name.to_owned() + ".gif");
-    let replay = replay(traces);
+    let replay = replay(trace);
     let frames: Vec<RgbImage> = replay.iter().map(|i| upscale(&i, 10)).collect();
     write_trace_animation(&frames, 80, &image_path)?;
     Ok(image_path)
@@ -53,36 +53,36 @@ fn main() -> std::io::Result<()> {
         {
             let i = create_gradient_image(5, 6);
             let i = t.create_from_image(&i);
-            let _ = blur3_inline(&mut t, i);
+            let _ = blur3_inline(&mut t, &i);
         }
-        replays.push(create_replay_image(dir, "inline", &t.images())?);
+        replays.push(create_replay_image(dir, "inline", &t.trace)?);
     }
     {
         let mut t = Tracer::new();
         {
             let i = create_gradient_image(5, 6);
             let i = t.create_from_image(&i);
-            let _ = blur3_intermediate(&mut t, i);
+            let _ = blur3_intermediate(&mut t, &i);
         }
-        replays.push(create_replay_image(dir, "intermediate", &t.images())?);
+        replays.push(create_replay_image(dir, "intermediate", &t.trace)?);
     }
     {
         let mut t = Tracer::new();
         {
             let i = create_gradient_image(5, 6);
             let i = t.create_from_image(&i);
-            let _ = blur3_split_y(&mut t, i, 2);
+            let _ = blur3_split_y(&mut t, &i, 2);
         }
-        replays.push(create_replay_image(dir, "stripped", &t.images())?);
+        replays.push(create_replay_image(dir, "stripped", &t.trace)?);
     }
-        {
+    {
         let mut t = Tracer::new();
         {
             let i = create_gradient_image(9, 6);
             let i = t.create_from_image(&i);
-            let _ = blur3_tiled(&mut t, i, 3, 3);
+            let _ = blur3_tiled(&mut t, &i, 3, 3);
         }
-        replays.push(create_replay_image(dir, "tiled", &t.images())?);
+        replays.push(create_replay_image(dir, "tiled", &t.trace)?);
     }
 
     write_html_page(dir, "traces.html", &replays)?;
