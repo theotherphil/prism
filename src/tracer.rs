@@ -162,41 +162,33 @@ pub fn replay(trace: &Trace) -> Vec<RgbImage> {
     for action in trace.actions.borrow().iter() {
         match action {
             Action::Read(id, (x, y)) => {
-                let offset = layout.offsets[id.0];
-                let x = *x + offset.0;
-                let y = *y + offset.1;
-
+                let (x, y) = layout.apply_offset(id.0, *x, *y);
                 let current = current_image.get(x, y);
                 current_image.set(x, y, green);
                 frames.push(current_image.clone());
-
                 current_image.set(x, y, current);
                 frames.push(current_image.clone());
             },
             Action::Write(id, (x, y), c) => {
-                let offset = layout.offsets[id.0];
-                let x = *x + offset.0;
-                let y = *y + offset.1;
-
+                let (x, y) = layout.apply_offset(id.0, *x, *y);
                 current_image.set(x, y, red);
                 frames.push(current_image.clone());
-
                 current_image.set(x, y, [*c, *c, *c]);
                 frames.push(current_image.clone());
             },
             Action::Clear(id) => {
-                let offset = layout.offsets[id.0];
                 let (w, h) = dimensions[id.0];
-
                 for y in 0..h {
                     for x in 0..w {
-                        current_image.set(x + offset.0, y + offset.1, red);
+                        let (xo, yo) = layout.apply_offset(id.0, x, y);
+                        current_image.set(xo, yo, red);
                     }
                 }
                 frames.push(current_image.clone());
                 for y in 0..h {
                     for x in 0..w {
-                        current_image.set(x + offset.0, y + offset.1, black);
+                        let (xo, yo) = layout.apply_offset(id.0, x, y);
+                        current_image.set(xo, yo, black);
                     }
                 }
                 frames.push(current_image.clone());
@@ -212,6 +204,12 @@ struct Layout {
     width: usize,
     height: usize,
     offsets: Vec<(usize, usize)>
+}
+
+impl Layout {
+    fn apply_offset(&self, index: usize, original_x: usize, original_y: usize) -> (usize, usize) {
+        (original_x + self.offsets[index].0, original_y + self.offsets[index].1)
+    }
 }
 
 // Given a series of trace images, create a new image to contain them all and a mapping
