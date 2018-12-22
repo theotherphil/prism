@@ -1,4 +1,4 @@
-//! Image and Factory implementations that trace all reads and traces to an image, to
+//! Image and Factory implementations that trace all reads from and writes to an image, to
 //! allow replay visualisations to be created.
 
 use std::rc::Rc;
