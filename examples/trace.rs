@@ -12,12 +12,13 @@ struct Opts {
     output_dir: PathBuf
 }
 
-fn write_html_page(dir: &PathBuf, path: &str, images: &[PathBuf]) -> std::io::Result<()> {
+fn write_html_page(dir: &PathBuf, path: &str, images: &[(&str, PathBuf)]) -> std::io::Result<()> {
     let mut html = File::create(dir.join(path))?;
     writeln!(html, "<html>")?;
     writeln!(html, "<body>")?;
     for image in images {
-        writeln!(html, "<img src='{}'/>", image.to_string_lossy())?;
+        writeln!(html, "<p>{}<p/>", image.0)?;
+        writeln!(html, "<img src='{}'/>", image.1.to_string_lossy())?;
         writeln!(html, "<br><br>")?;
     }
     writeln!(html, "</body>")?;
@@ -59,11 +60,26 @@ fn main() -> std::io::Result<()> {
     let dir = &opts.output_dir;
 
     let replays = vec![
-        visualise(dir, "inline", &gradient_image(5, 6), |t, i| blur3_inline(t, i), 60)?,
-        visualise(dir, "intermediate", &gradient_image(5, 6), |t, i| blur3_intermediate(t, i), 60)?,
-        visualise(dir, "local_intermediate", &gradient_image(5, 6), |t, i| blur3_local_intermediate(t, i), 60)?,
-        visualise(dir, "stripped", &gradient_image(5, 6), |t, i| blur3_split_y(t, i, 2), 60)?,
-        visualise(dir, "tiled", &gradient_image(9, 6), |t, i| blur3_tiled(t, i, 3, 3), 20)?,
+        (
+            "Dimensions: y, x. Compute at blur_v.x, store at blur_v.x",
+            visualise(dir, "inline", &gradient_image(5, 6), |t, i| blur3_inline(t, i), 60)?
+        ),
+        (
+            "Dimensions: y, x. Compute at root, store at root",
+            visualise(dir, "intermediate", &gradient_image(5, 6), |t, i| blur3_intermediate(t, i), 60)?
+        ),
+        (
+            "Dimensions: y, x. Compute at blur_v.x, store at root",
+            visualise(dir, "local_intermediate", &gradient_image(5, 6), |t, i| blur3_local_intermediate(t, i), 60)?
+        ),
+        (
+            "Dimensions: yo, y, x. Compute at blur_v.yo, store at blur_v.yo",
+            visualise(dir, "stripped", &gradient_image(5, 6), |t, i| blur3_split_y(t, i, 2), 60)?
+        ),
+        (
+            "Dimension: yo, xo, y, x. Compute at blur_v.xo, store at blur_v.xo",
+            visualise(dir, "tiled", &gradient_image(9, 6), |t, i| blur3_tiled(t, i, 3, 3), 20)?
+        ),
     ];
 
     write_html_page(dir, "traces.html", &replays)?;

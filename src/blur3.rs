@@ -63,6 +63,8 @@ fn blur3_intermediate_body<I: Image<u8>>(image: &I, h: &mut I, v: &mut I) {
 /// these values as soon as they're created.
 pub fn blur3_local_intermediate<F: Factory>(factory: &mut F, image: &F::Image) -> F::Image {
     assert!(image.height() > 2);
+    // This can be optimised to use a rolling buffer that only contains three rows
+    // Halide automates this... I think
     let mut h = factory.create_image(image.width(), image.height());
     let mut v = factory.create_image(image.width(), image.height());
     blur3_local_intermediate_body(image, &mut h, &mut v);

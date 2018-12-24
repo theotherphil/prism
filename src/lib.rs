@@ -5,6 +5,27 @@
 
 #![feature(test)]
 
+
+
+//#######################################
+//#######################################
+//
+// Next steps: 
+// * write an example where an input and output
+// buffer are created and passed to a function
+// hand written in LLVM ir
+//
+// * create trivial AST and generate IR from it
+// (can initially just map any AST to exactly 
+// the hand-written IR), call this IR from example
+//
+//#######################################
+//#######################################
+
+
+
+
+
 #[macro_use]
 pub mod buffer;
 pub mod io;
