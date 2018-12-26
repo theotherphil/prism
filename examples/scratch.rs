@@ -25,7 +25,8 @@ pub fn process(src: *const u8, dst: *mut u8, width: usize, height: usize, ) {
 fn main() {
     let w = black_box(100usize);
     let h = black_box(100usize);
-    let src = vec![0u8; w * h];
+    let p = black_box(0u8);
+    let src = vec![p; w * h];
     let mut dst = vec![0u8; w * h];
 
     process(src.as_ptr(), dst.as_mut_ptr(), w, h);
