@@ -5,22 +5,29 @@
 //
 // CARGO_INCREMENTAL=0 RUSTFLAGS="--emit=llvm-ir" cargo run --release --example scratch
 
+#![feature(test)]
+extern crate test;
+use test::black_box;
+
+#[inline(never)]
 pub fn process(src: *const u8, dst: *mut u8, width: usize, height: usize, ) {
     unsafe {
         for y in 0..height {
             for x in 0..width {
                 dst
                     .offset((y * width + x) as isize)
-                    .write(*src.offset((y * width + x) as isize));
+                    .write(*src.offset((y * width + x) as isize) + 3);
             }
         }
     }
 }
 
 fn main() {
-    let src = vec![0u8; 100 * 100];
-    let mut dst = vec![0u8; 100 * 100];
+    let w = black_box(100usize);
+    let h = black_box(100usize);
+    let src = vec![0u8; w * h];
+    let mut dst = vec![0u8; w * h];
 
-    process(src.as_ptr(), dst.as_mut_ptr(), 100, 100);
+    process(src.as_ptr(), dst.as_mut_ptr(), w, h);
     println!("{:?}", dst.iter().take(10).collect::<Vec<_>>());
 }
