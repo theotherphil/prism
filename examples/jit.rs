@@ -83,6 +83,61 @@ fn create_sum_module_via_builder(context: LLVMContextRef) -> LLVMModuleRef {
     }
 }
 
+fn create_process_image_module_from_handwritten_ir(context: LLVMContextRef) -> LLVMModuleRef {
+    let ir =
+"define void @process_image(
+    i8* nocapture readonly %src, i64 %src_width, i64 %src_height,
+    i8* nocapture %dst, i64 %dst_width, i64 %dst_height) {
+; TODO: try using phi nodes instead of alloca for loop variables
+; TODO: this code assumes that src and dst have the same dimensions. add validation
+entry:
+  %y = alloca i32, align 4
+  %x = alloca i32, align 4
+  %ymax = trunc i64 %src_height to i32
+  %xmax = trunc i64 %src_width to i32
+  store i32 0, i32* %y, align 4
+  store i32 0, i32* %x, align 4
+  br label %y.for.cond
+y.for.cond:
+  %tmp.y.cond = load i32, i32* %y, align 4
+  %cmp.y = icmp slt i32 %tmp.y.cond, %ymax
+  br i1 %cmp.y, label %y.for.body, label %y.for.end
+y.for.body:
+  %tmp1.y = load i32, i32* %y, align 4
+  store i32 0, i32* %x, align 4
+  br label %x.for.cond
+x.for.cond:
+  %tmp.x.cond = load i32, i32* %x, align 4
+  %cmp.x = icmp slt i32 %tmp.x.cond, %xmax
+  br i1 %cmp.x, label %x.for.body, label %x.for.end
+x.for.body:
+  %tmp1.x = load i32, i32* %x, align 4
+  %m = mul i32 %tmp1.y, %xmax
+  %off = add i32 %m, %tmp1.x
+  %sidx = getelementptr i8, i8* %src, i32 %off
+  %didx = getelementptr i8, i8* %dst, i32 %off
+  %val = load i8, i8* %sidx
+  %upd = add i8 %val, 3
+  store i8 %upd, i8* %didx
+  br label %x.for.inc
+x.for.inc:
+  %tmp2.x = load i32, i32* %x, align 4
+  %inc.x = add nsw i32 %tmp2.x, 1
+  store i32 %inc.x, i32* %x, align 4
+  br label %x.for.cond
+y.for.inc:
+  %tmp2.y = load i32, i32* %y, align 4
+  %inc.y = add nsw i32 %tmp2.y, 1
+  store i32 %inc.y, i32* %y, align 4
+  br label %y.for.cond
+x.for.end:
+  br label %y.for.inc
+y.for.end:
+  ret void
+}";
+    create_module_from_handwritten_ir(context, ir)
+}
+
 fn create_loop1_module_from_handwritten_ir(context: LLVMContextRef) -> LLVMModuleRef {
     let ir =
 "define void @loop1(i8* nocapture readonly %src, i8* nocapture %dst, i64 %len)
@@ -92,12 +147,10 @@ entry:
   %bound = trunc i64 %len to i32
   store i32 0, i32* %i, align 4
   br label %for.cond
-
 for.cond:
   %0 = load i32, i32* %i, align 4
   %cmp = icmp slt i32 %0, %bound
   br i1 %cmp, label %for.body, label %for.end
-
 for.body:
   %1 = load i32, i32* %i, align 4
   %sidx = getelementptr i8, i8* %src, i32 %1
@@ -106,13 +159,11 @@ for.body:
   %upd = add i8 %val, 3
   store i8 %upd, i8* %didx
   br label %for.inc
-
 for.inc:
   %2 = load i32, i32* %i, align 4
   %inc = add nsw i32 %2, 1
   store i32 %inc, i32* %i, align 4
   br label %for.cond
-
 for.end:
   ret void
 }";
@@ -133,7 +184,31 @@ fn loop_1d_example() {
         let x = [1, 2, 3];
         let mut y = [0u8; 3];
         f(x.as_ptr(), y.as_mut_ptr(), x.len());
-        println!("map(+1, {:?}) = {:?}", x, y);
+        println!("map(+3, {:?}) = {:?}", x, y);
+        LLVMDisposeExecutionEngine(ee);
+        LLVMContextDispose(context);
+    }
+}
+
+fn process_image_example() {
+    unsafe {
+        let context = LLVMContextCreate();
+        let module = create_process_image_module_from_handwritten_ir(context);
+        let mut ee = mem::uninitialized();
+        let mut out = mem::zeroed();
+        println!("Execution engine creation: PENDING");
+        LLVMCreateExecutionEngineForModule(&mut ee, module, &mut out);
+        println!("Execution engine creation: COMPLETE");
+        println!("Function creation: PENDING");
+        let addr = LLVMGetFunctionAddress(ee, b"process_image\0".as_ptr() as *const _);
+        let f: extern "C" fn(*const u8, usize, usize, *mut u8, usize, usize) = mem::transmute(addr);
+        println!("Function creation: COMPLETE");
+        let x = [1, 2, 3, 4, 5, 6, 7, 8, 9];
+        let mut y = [0u8; 8];
+        println!("Function execution: PENDING");
+        f(x.as_ptr(), 3, 3, y.as_mut_ptr(), 3, 3);
+        println!("Function execution: COMPLETE");
+        println!("map(+3, {:?}) = {:?}", x, y);
         LLVMDisposeExecutionEngine(ee);
         LLVMContextDispose(context);
     }
@@ -169,7 +244,8 @@ fn jit_sum_example(variation: Variation) {
 enum Variation {
     Handwritten,
     Jit,
-    Loop1d
+    Loop1d,
+    ProcessImage
 }
 
 use structopt::StructOpt;
@@ -179,6 +255,7 @@ fn variation_from_str(d: &str) -> Variation {
         "hand" => Variation::Handwritten,
         "jit" => Variation::Jit,
         "1d" => Variation::Loop1d,
+        "image" => Variation::ProcessImage,
         _ => panic!("invalid Variation variant")
     }
 }
@@ -196,6 +273,7 @@ fn main() {
     let variation = variation_from_str(&opts.variation);
     match variation {
         Variation::Loop1d => loop_1d_example(),
+        Variation::ProcessImage => process_image_example(),
         _ => jit_sum_example(variation)
     }
 }
