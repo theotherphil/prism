@@ -6,6 +6,7 @@
 extern crate llvm_sys as llvm;
 
 use std::mem;
+use std::ops::{Add, Mul};
 use llvm::*;
 use llvm::prelude::*;
 use llvm::core::*;
@@ -86,21 +87,121 @@ fn create_sum_module_via_builder(context: LLVMContextRef) -> LLVMModuleRef {
     module
 }
 
-fn create_process_image_module_via_builder(context: LLVMContextRef) -> LLVMModuleRef {
+#[derive(Debug, Clone)]
+enum Func {
+    // Value read from the input image
+    Input,
+    Const(i8),
+    Add(Box<Func>, Box<Func>),
+    Mul(Box<Func>, Box<Func>)
+}
+
+impl Func {
+    fn id() -> Func {
+        Func::Input
+    }
+}
+
+macro_rules! impl_bin_op {
+    ($trait_name:ident, $trait_op:ident, $ctor:expr) => {
+        impl $trait_name<Self> for Func {
+            type Output = Func;
+            fn $trait_op(self, rhs: Self) -> Func {
+                $ctor(Box::new(self), Box::new(rhs))
+            }
+        }
+
+        impl $trait_name<i8> for Func {
+            type Output = Func;
+            fn $trait_op(self, rhs: i8) -> Func {
+                $ctor(Box::new(self), Box::new(Func::Const(rhs)))
+            }
+        }
+
+        impl $trait_name<Func> for i8 {
+            type Output = Func;
+            fn $trait_op(self, rhs: Func) -> Func {
+                $ctor(Box::new(Func::Const(self)), Box::new(rhs))
+            }
+        }
+    };
+}
+
+impl_bin_op!(Add, add, Func::Add);
+impl_bin_op!(Mul, mul, Func::Mul);
+
+impl Func {
+    // For now we'll just support defining out(x,y) = f(in(x, y)),
+    // where f is defined via an instance of Func
+    fn compile(&self, builder: &Builder, input: LLVMValueRef) -> LLVMValueRef {
+        match self {
+            Func::Input => input,
+            Func::Const(c) => builder.const_i8(*c),
+            Func::Add(l, r) => {
+                let left = l.compile(builder, input);
+                let right = r.compile(builder, input);
+                builder.add(left, right)
+            },
+            Func::Mul(l, r) => {
+                let left = l.compile(builder, input);
+                let right = r.compile(builder, input);
+                builder.mul(left, right)
+            }
+        }
+    }
+
+    fn pretty_print(&self) -> String {
+        match self {
+            Func::Input => "v".into(),
+            Func::Const(c) => c.to_string(),
+            Func::Add(l, r) => {
+                let left = l.pretty_print_with_parens();
+                let right = r.pretty_print_with_parens();
+                format!("{} + {}", left, right)
+            }
+            Func::Mul(l, r) => {
+                let left = l.pretty_print_with_parens();
+                let right = r.pretty_print_with_parens();
+                format!("{} * {}", left, right)
+            }
+        }
+    }
+
+    fn pretty_print_with_parens(&self) -> String {
+        let pp = self.pretty_print();
+        match self {
+            Func::Input => pp,
+            Func::Const(_) => pp,
+            Func::Add(_, _) => format!("({})", pp),
+            Func::Mul(_, _)  => format!("({})", pp)
+        }
+    }
+}
+
+fn create_process_image_module_via_builder(context: LLVMContextRef, func: &Func) -> LLVMModuleRef {
     let module = unsafe {
         LLVMModuleCreateWithNameInContext(c_str!("process_image"), context)
     };
     let builder = Builder::new(context);
 
-    let i64t = builder.type_i64();
-    let i32t = builder.type_i32();
-    let i8pt = builder.type_i8_ptr();
-
     let function_type = builder.func_type(
         builder.type_void(),
-        &mut [i8pt, i64t, i64t, i8pt, i64t, i64t]
+        &mut [
+            builder.type_i8_ptr(),
+            builder.type_i64(),
+            builder.type_i64(),
+            builder.type_i8_ptr(),
+            builder.type_i64(),
+            builder.type_i64()
+        ]
     );
     let function = builder.add_func(module, "process_image", function_type);
+    let params = builder.get_params(function);
+    // We currently just assume that src and dst have the same dimensions
+    // so ignore the last two params
+    let (src, src_width, src_height, dst) = (
+        params[0], params[1], params[2], params[3]
+    );
 
     let bb_entry = builder.new_block(function, "entry");
     let bb_ycond = builder.new_block(function, "y.for.cond");
@@ -112,19 +213,12 @@ fn create_process_image_module_via_builder(context: LLVMContextRef) -> LLVMModul
     let bb_xinc = builder.new_block(function, "x.for.inc");
     let bb_xend = builder.new_block(function, "x.for.end");
 
-    let params = builder.get_params(function);
-    // We currently just assume that src and dst have the same dimensions
-    // so ignore the last two params
-    let (src, src_width, src_height, dst) = (
-        params[0], params[1], params[2], params[3]
-    );
-
     // entry:
     builder.position_at_end(bb_entry);
-    let y = builder.alloca(i32t, "y", 4);
-    let x = builder.alloca(i32t, "x", 4);
-    let ymax = builder.trunc(src_height, i32t);
-    let xmax = builder.trunc(src_width, i32t);
+    let y = builder.alloca(builder.type_i32(), "y", 4);
+    let x = builder.alloca(builder.type_i32(), "x", 4);
+    let ymax = builder.trunc(src_height, builder.type_i32());
+    let xmax = builder.trunc(src_width, builder.type_i32());
     builder.store(builder.const_i32(0), y, 4);
     builder.store(builder.const_i32(0), x, 4);
     builder.br(bb_ycond);
@@ -151,7 +245,7 @@ fn create_process_image_module_via_builder(context: LLVMContextRef) -> LLVMModul
     let sidx = builder.in_bounds_gep(src, off);
     let didx = builder.in_bounds_gep(dst, off);
     let val = builder.load(sidx, 1);
-    let upd = builder.add(val, builder.const_i8(3));
+    let upd = func.compile(&builder, val);
     builder.store(upd, didx, 1);
     builder.br(bb_xinc);
     // x.for.inc:
@@ -229,9 +323,10 @@ y.for.end:
 
 fn run_process_image_example(context: LLVMContextRef, codegen: Codegen) {
     unsafe {
+        let func = (Func::id() + 1i8) * 2i8;
         let module = match codegen {
             Codegen::Handwritten => create_module_from_handwritten_ir(context, PROCESS_IMAGE_IR),
-            Codegen::Builder => create_process_image_module_via_builder(context)
+            Codegen::Builder => create_process_image_module_via_builder(context, &func)
         };
         // Dump the module as IR to stdout.
         LLVMDumpModule(module);
@@ -249,8 +344,7 @@ fn run_process_image_example(context: LLVMContextRef, codegen: Codegen) {
             "Function execution",
             || f(x.buffer.as_ptr(), 3, 3, y.buffer.as_mut_ptr(), 3, 3)
         );
-        println!("map(+3, {:?}) = {:?}", x, y);
-    
+        println!("map({}, {:?}) = {:?}", func.pretty_print(), x, y);
     }
 }
 
