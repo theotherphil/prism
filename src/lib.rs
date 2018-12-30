@@ -15,7 +15,7 @@ pub mod replay;
 pub mod traits;
 pub mod blur3;
 #[macro_use]
-pub mod builder;
+pub mod codegen;
 
 pub use crate::buffer::*;
 pub use crate::io::*;

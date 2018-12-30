@@ -14,8 +14,7 @@ use llvm::target::*;
 use llvm::ir_reader::*;
 use std::ffi::CString;
 use prism::*;
-use libc::c_char;
-use prism::builder::*;
+use prism::codegen::*;
 
 /// Call a function that returns an integer error code and panic
 /// if the result is non-zero
@@ -40,38 +39,6 @@ fn initialise_jit() {
         LLVMLinkInMCJIT();
         c_try!(LLVM_InitializeNativeTarget, "Failed to initialise native target");
         c_try!(LLVM_InitializeNativeAsmPrinter, "Failed to initialise native assembly printer");
-    }
-}
-
-struct ExecutionEngine {
-    // Need lifetimes to make this safe - need to tie
-    // lifetime of execution engine (and everything else)
-    // to the lifetime of the LLVM context we're using
-    engine: LLVMExecutionEngineRef
-}
-
-impl ExecutionEngine {
-    fn new(module: LLVMModuleRef) -> ExecutionEngine {
-        unsafe {
-            let mut engine = mem::uninitialized();
-            let mut out = mem::zeroed();
-            LLVMCreateExecutionEngineForModule(&mut engine, module, &mut out);
-            ExecutionEngine { engine }
-        }
-    }
-
-    fn get_func_addr(&self, name: *const c_char) -> u64 {
-        unsafe {
-            LLVMGetFunctionAddress(self.engine, name)
-        }
-    }
-}
-
-impl Drop for ExecutionEngine {
-    fn drop(&mut self) {
-        unsafe {
-            LLVMDisposeExecutionEngine(self.engine);
-        }
     }
 }
 
