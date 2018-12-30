@@ -1,6 +1,7 @@
 extern crate llvm_sys as llvm;
 
 use std::mem;
+use llvm::*;
 use llvm::prelude::*;
 use llvm::core::*;
 use llvm::execution_engine::*;
@@ -71,9 +72,114 @@ fn create_sum_module_via_builder(context: LLVMContextRef) -> LLVMModuleRef {
         let z = LLVMGetParam(function, 2);
         let sum = LLVMBuildAdd(builder, x, y, b"sum.1\0".as_ptr() as *const _);
         let sum = LLVMBuildAdd(builder, sum, z, b"sum.2\0".as_ptr() as *const _);
-        // Emit a `ret void` into the function
         LLVMBuildRet(builder, sum);
-        // done building
+        LLVMDisposeBuilder(builder);
+        module
+    }
+}
+
+fn create_process_image_module_via_builder(context: LLVMContextRef) -> LLVMModuleRef {
+    unsafe {
+        let module = LLVMModuleCreateWithNameInContext(b"process_image\0".as_ptr() as *const _, context);
+        let builder = LLVMCreateBuilderInContext(context);
+
+        let voidt = LLVMVoidTypeInContext(context);
+        let i64t = LLVMInt64TypeInContext(context);
+        let i32t = LLVMInt32TypeInContext(context);
+        let i8t = LLVMInt8TypeInContext(context);
+        let i8pt = LLVMPointerType(i8t, 0);
+        let zero_i32 = LLVMConstInt(i32t, 0, 0);
+        let one_i32 = LLVMConstInt(i32t, 1, 0);
+
+        let mut argts = [i8pt, i64t, i64t, i8pt, i64t, i64t];
+        let function_type = LLVMFunctionType(voidt, argts.as_mut_ptr(), argts.len() as u32, 0);
+        let function = LLVMAddFunction(module, b"process_image\0".as_ptr() as *const _, function_type);
+
+        let bb_entry = LLVMAppendBasicBlockInContext(context, function, b"entry\0".as_ptr() as *const _);
+        let bb_ycond = LLVMAppendBasicBlockInContext(context, function, b"y.for.cond\0".as_ptr() as *const _);
+        let bb_ybody = LLVMAppendBasicBlockInContext(context, function, b"y.for.body\0".as_ptr() as *const _);
+        let bb_yinc = LLVMAppendBasicBlockInContext(context, function, b"y.for.inc\0".as_ptr() as *const _);
+        let bb_yend = LLVMAppendBasicBlockInContext(context, function, b"y.for.end\0".as_ptr() as *const _);
+        let bb_xcond = LLVMAppendBasicBlockInContext(context, function, b"x.for.cond\0".as_ptr() as *const _);
+        let bb_xbody = LLVMAppendBasicBlockInContext(context, function, b"x.for.body\0".as_ptr() as *const _);
+        let bb_xinc = LLVMAppendBasicBlockInContext(context, function, b"x.for.inc\0".as_ptr() as *const _);
+        let bb_xend = LLVMAppendBasicBlockInContext(context, function, b"x.for.end\0".as_ptr() as *const _);
+
+        let src = LLVMGetParam(function, 0);
+        let src_width = LLVMGetParam(function, 1);
+        let src_height = LLVMGetParam(function, 2);
+        let dst = LLVMGetParam(function, 3);
+        // We currently just assume that src and dst have the same dimensions
+        //let dst_width = LLVMGetParam(function, 4);
+        //let dst_height = LLVMGetParam(function, 5);
+
+        // entry:
+        LLVMPositionBuilderAtEnd(builder, bb_entry);
+        let y = LLVMBuildAlloca(builder, i32t, b"y\0".as_ptr() as *const _);
+        LLVMSetAlignment(y, 4);
+        let x = LLVMBuildAlloca(builder, i32t, b"x\0".as_ptr() as *const _);
+        LLVMSetAlignment(x, 4);
+
+        let ymax = LLVMBuildTrunc(builder, src_height, i32t, b"ymax\0".as_ptr() as *const _);
+        let xmax = LLVMBuildTrunc(builder, src_width, i32t, b"xmax\0".as_ptr() as *const _);
+        LLVMBuildStore(builder, zero_i32, y);
+        LLVMBuildStore(builder, zero_i32, x);
+        LLVMBuildBr(builder, bb_ycond);
+
+        // y.for.cond:
+        LLVMPositionBuilderAtEnd(builder, bb_ycond);
+        let tmp_y_cond = LLVMBuildLoad(builder, y, b"tmp.y.cond\0".as_ptr() as *const _);
+        let ycmp = LLVMBuildICmp(builder, LLVMIntPredicate::LLVMIntSLT, tmp_y_cond, ymax, b"cmp.y\0".as_ptr() as *const _);
+        LLVMBuildCondBr(builder, ycmp, bb_ybody, bb_yend);
+
+        // y.for.body:
+        LLVMPositionBuilderAtEnd(builder, bb_ybody);
+        let tmp1_y = LLVMBuildLoad(builder, y, b"tmp1.y\0".as_ptr() as *const _);
+        LLVMBuildStore(builder, zero_i32, x);
+        LLVMBuildBr(builder, bb_xcond);
+
+        // x.for.cond:
+        LLVMPositionBuilderAtEnd(builder, bb_xcond);
+        let tmp_x_cond = LLVMBuildLoad(builder, y, b"tmp.x.cond\0".as_ptr() as *const _);
+        let xcmp = LLVMBuildICmp(builder, LLVMIntPredicate::LLVMIntSLT, tmp_x_cond, xmax, b"cmp.x\0".as_ptr() as *const _);
+        LLVMBuildCondBr(builder, xcmp, bb_xbody, bb_xend);
+
+        // x.for.body:
+        LLVMPositionBuilderAtEnd(builder, bb_xbody);
+        let tmp1_x = LLVMBuildLoad(builder, x, b"tmp1.x\0".as_ptr() as *const _);
+        let m = LLVMBuildMul(builder, tmp1_y, xmax, b"m\0".as_ptr() as *const _);
+        let off = LLVMBuildAdd(builder, m, tmp1_x, b"off\0".as_ptr() as *const _);
+        let mut idxs = [off];
+        let sidx = LLVMBuildInBoundsGEP(builder, src, idxs.as_mut_ptr(), 1, b"sidx\0".as_ptr() as *const _);
+        let didx = LLVMBuildInBoundsGEP(builder, dst, idxs.as_mut_ptr(), 1, b"didx\0".as_ptr() as *const _);
+        let val = LLVMBuildLoad(builder, sidx, b"val\0".as_ptr() as *const _);
+        let three_i8 = LLVMConstInt(i8t, 3, 0);
+        let upd = LLVMBuildAdd(builder, val, three_i8, b"upd\0".as_ptr() as *const _);
+        LLVMBuildStore(builder, upd, didx);
+        LLVMBuildBr(builder, bb_xinc);
+
+        // x.for.inc:
+        LLVMPositionBuilderAtEnd(builder, bb_xinc);
+        let tmp2_x = LLVMBuildLoad(builder, x, b"tmp2.x\0".as_ptr() as *const _);
+        let inc_x = LLVMBuildNSWAdd(builder, tmp2_x, one_i32, b"inc.x\0".as_ptr() as *const _);
+        LLVMBuildStore(builder, inc_x, x);
+        LLVMBuildBr(builder, bb_xcond);
+
+        // y.for.inc:
+        LLVMPositionBuilderAtEnd(builder, bb_yinc);
+        let tmp2_y = LLVMBuildLoad(builder, y, b"tmp2_y\0".as_ptr() as *const _);
+        let inc_y = LLVMBuildNSWAdd(builder, tmp2_y, one_i32, b"inc.y\0".as_ptr() as *const _);
+        LLVMBuildStore(builder, inc_y, y);
+        LLVMBuildBr(builder, bb_ycond);
+
+        // x.for.end:
+        LLVMPositionBuilderAtEnd(builder, bb_xend);
+        LLVMBuildBr(builder, bb_yinc);
+
+        // y.for.end
+        LLVMPositionBuilderAtEnd(builder, bb_yend);
+        LLVMBuildRetVoid(builder);
+
         LLVMDisposeBuilder(builder);
         module
     }
@@ -135,8 +241,10 @@ fn run_process_image_example(codegen: Codegen) {
         let context = LLVMContextCreate();
         let module = match codegen {
             Codegen::Handwritten => create_module_from_handwritten_ir(context, PROCESS_IMAGE_IR),
-            Codegen::Builder => panic!("not yet implemented")
+            Codegen::Builder => create_process_image_module_via_builder(context)
         };
+        // Dump the module as IR to stdout.
+        LLVMDumpModule(module);
         let mut ee = mem::uninitialized();
         let mut out = mem::zeroed();
         println!("Execution engine creation: PENDING");
