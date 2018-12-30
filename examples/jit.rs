@@ -114,31 +114,38 @@ fn create_process_image_module_via_builder(context: LLVMContextRef) -> LLVMModul
 
         let ymax = LLVMBuildTrunc(builder, src_height, i32t, c_str!("ymax"));
         let xmax = LLVMBuildTrunc(builder, src_width, i32t, c_str!("xmax"));
-        LLVMBuildStore(builder, zero_i32, y);
-        LLVMBuildStore(builder, zero_i32, x);
+        let s = LLVMBuildStore(builder, zero_i32, y);
+        LLVMSetAlignment(s, 4);
+        let s = LLVMBuildStore(builder, zero_i32, x);
+        LLVMSetAlignment(s, 4);
         LLVMBuildBr(builder, bb_ycond);
 
         // y.for.cond:
         LLVMPositionBuilderAtEnd(builder, bb_ycond);
         let tmp_y_cond = LLVMBuildLoad(builder, y, c_str!("tmp.y.cond"));
+        LLVMSetAlignment(tmp_y_cond, 4);
         let ycmp = LLVMBuildICmp(builder, LLVMIntPredicate::LLVMIntSLT, tmp_y_cond, ymax, c_str!("cmp.y"));
         LLVMBuildCondBr(builder, ycmp, bb_ybody, bb_yend);
 
         // y.for.body:
         LLVMPositionBuilderAtEnd(builder, bb_ybody);
         let tmp1_y = LLVMBuildLoad(builder, y, c_str!("tmp1.y"));
-        LLVMBuildStore(builder, zero_i32, x);
+        LLVMSetAlignment(tmp1_y, 4);
+        let s = LLVMBuildStore(builder, zero_i32, x);
+        LLVMSetAlignment(s, 4);
         LLVMBuildBr(builder, bb_xcond);
 
         // x.for.cond:
         LLVMPositionBuilderAtEnd(builder, bb_xcond);
-        let tmp_x_cond = LLVMBuildLoad(builder, y, c_str!("tmp.x.cond"));
+        let tmp_x_cond = LLVMBuildLoad(builder, x, c_str!("tmp.x.cond"));
+        LLVMSetAlignment(tmp_x_cond, 4);
         let xcmp = LLVMBuildICmp(builder, LLVMIntPredicate::LLVMIntSLT, tmp_x_cond, xmax, c_str!("cmp.x"));
         LLVMBuildCondBr(builder, xcmp, bb_xbody, bb_xend);
 
         // x.for.body:
         LLVMPositionBuilderAtEnd(builder, bb_xbody);
         let tmp1_x = LLVMBuildLoad(builder, x, c_str!("tmp1.x"));
+        LLVMSetAlignment(tmp1_x, 4);
         let m = LLVMBuildMul(builder, tmp1_y, xmax, c_str!("m"));
         let off = LLVMBuildAdd(builder, m, tmp1_x, c_str!("off"));
         let mut idxs = [off];
@@ -153,15 +160,19 @@ fn create_process_image_module_via_builder(context: LLVMContextRef) -> LLVMModul
         // x.for.inc:
         LLVMPositionBuilderAtEnd(builder, bb_xinc);
         let tmp2_x = LLVMBuildLoad(builder, x, c_str!("tmp2.x"));
+        LLVMSetAlignment(tmp2_x, 4);
         let inc_x = LLVMBuildNSWAdd(builder, tmp2_x, one_i32, c_str!("inc.x"));
-        LLVMBuildStore(builder, inc_x, x);
+        let s = LLVMBuildStore(builder, inc_x, x);
+        LLVMSetAlignment(s, 4);
         LLVMBuildBr(builder, bb_xcond);
 
         // y.for.inc:
         LLVMPositionBuilderAtEnd(builder, bb_yinc);
         let tmp2_y = LLVMBuildLoad(builder, y, c_str!("tmp2_y"));
+        LLVMSetAlignment(tmp2_y, 4);
         let inc_y = LLVMBuildNSWAdd(builder, tmp2_y, one_i32, c_str!("inc.y"));
-        LLVMBuildStore(builder, inc_y, y);
+        let s = LLVMBuildStore(builder, inc_y, y);
+        LLVMSetAlignment(s, 4);
         LLVMBuildBr(builder, bb_ycond);
 
         // x.for.end:
