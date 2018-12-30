@@ -10,18 +10,8 @@ use std::ops::{Add, Mul};
 use llvm::*;
 use llvm::prelude::*;
 use llvm::core::*;
-use llvm::execution_engine::*;
-use llvm::target::*;
-use llvm::ir_reader::*;
-use std::ffi::CString;
 use prism::*;
 use prism::codegen::*;
-
-/// Call a function that returns an integer error code and panic
-/// if the result is non-zero
-macro_rules! c_try {
-    ($f:expr, $message:expr) => { if $f() != 0 { panic!($message); } };
-}
 
 macro_rules! log_action {
     ($name:expr, $action:expr) => {{
@@ -34,35 +24,6 @@ macro_rules! log_action {
     }};
 }
 
-/// Do the global setup necessary to create execution engines which compile to native code
-fn initialise_jit() {
-    unsafe {
-        LLVMLinkInMCJIT();
-        c_try!(LLVM_InitializeNativeTarget, "Failed to initialise native target");
-        c_try!(LLVM_InitializeNativeAsmPrinter, "Failed to initialise native assembly printer");
-    }
-}
-
-fn create_module_from_handwritten_ir(context: LLVMContextRef, ir: &str) -> LLVMModuleRef {
-    unsafe {
-        let ir = CString::new(ir).unwrap();
-
-        let ir_buffer = LLVMCreateMemoryBufferWithMemoryRange(
-            ir.as_ptr(), ir.as_bytes_with_nul().len(), std::ptr::null(), 1);
-
-        let mut module = mem::uninitialized();
-        let mut message = mem::zeroed();
-        let res = LLVMParseIRInContext(context, ir_buffer, &mut module, &mut message);
-
-        if res != 0 {
-            let message_str = CString::from_raw(message);
-            panic!("IR parsing failed: {:?}", message_str);
-        }
-
-        module
-    }
-}
-
 const SUM_IR: &str = "define i64 @sum(i64, i64, i64) {
 entry:
     %sum.1 = add i64 %0, %1
@@ -70,10 +31,8 @@ entry:
     ret i64 %sum.2
 }";
 
-fn create_sum_module_via_builder(context: LLVMContextRef) -> LLVMModuleRef {
-    let module = unsafe {
-        LLVMModuleCreateWithNameInContext(c_str!("sum"), context)
-    };
+fn create_sum_module_via_builder(context: &Context) -> LLVMModuleRef {
+    let module = context.new_module("sum");
     let builder = Builder::new(context);
     let i64t = builder.type_i64();
     let function_type = builder.func_type(i64t, &mut [i64t, i64t, i64t]);
@@ -178,10 +137,8 @@ impl Func {
     }
 }
 
-fn create_process_image_module_via_builder(context: LLVMContextRef, func: &Func) -> LLVMModuleRef {
-    let module = unsafe {
-        LLVMModuleCreateWithNameInContext(c_str!("process_image"), context)
-    };
+fn create_process_image_module_via_builder(context: &Context, func: &Func) -> LLVMModuleRef {
+    let module = context.new_module("process_image");
     let builder = Builder::new(context);
 
     let function_type = builder.func_type(
@@ -321,7 +278,7 @@ y.for.end:
   ret void
 }";
 
-fn run_process_image_example(context: LLVMContextRef, codegen: Codegen) {
+fn run_process_image_example(context: &Context, codegen: Codegen) {
     unsafe {
         let func = (Func::id() + 1i8) * 2i8;
         let module = match codegen {
@@ -348,7 +305,7 @@ fn run_process_image_example(context: LLVMContextRef, codegen: Codegen) {
     }
 }
 
-fn run_sum_example(context: LLVMContextRef, codegen: Codegen) {
+fn run_sum_example(context: &Context, codegen: Codegen) {
     unsafe {
         let module = match codegen {
             Codegen::Handwritten => create_module_from_handwritten_ir(context, SUM_IR),
@@ -409,17 +366,15 @@ struct Opts {
 }
 
 fn main() {
-    initialise_jit();
-    let context = unsafe { LLVMContextCreate() };
+    initialise_llvm_jit();
+    let context = Context::new();
     
     let opts = Opts::from_args();
     let example = example_from_str(&opts.example);
     let codegen = codegen_from_str(&opts.codegen);
     match example {
-        Example::Sum => run_sum_example(context, codegen),
-        Example::ProcessImage => run_process_image_example(context, codegen)
+        Example::Sum => run_sum_example(&context, codegen),
+        Example::ProcessImage => run_process_image_example(&context, codegen)
     };
-
-    unsafe { LLVMContextDispose(context); }
 }
 

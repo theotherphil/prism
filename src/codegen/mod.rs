@@ -1,6 +1,8 @@
 
 pub mod builder;
-pub mod execution_engine;
+pub mod lower;
+pub mod compile;
 
 pub use self::builder::*;
-pub use self::execution_engine::*;
+pub use self::lower::*;
+pub use self::compile::*;

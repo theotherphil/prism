@@ -9,6 +9,7 @@ use llvm::core::*;
 use llvm::*;
 use libc::c_char;
 use std::ffi::CString;
+use crate::codegen::compile::*;
 
 fn noname() -> *const c_char {
     static CNULL: c_char = 0;
@@ -54,11 +55,11 @@ macro_rules! impl_llvm_binary_op {
 }
 
 impl Builder {
-    pub fn new(context: LLVMContextRef) -> Builder {
+    pub fn new(context: &Context) -> Builder {
         unsafe {
             Builder {
-                builder: LLVMCreateBuilderInContext(context),
-                context: context
+                builder: LLVMCreateBuilderInContext(context.context),
+                context: context.context
             }
         }
     }
