@@ -2,7 +2,7 @@
 use std::mem;
 use llvm::prelude::*;
 use llvm::execution_engine::*;
-use libc::c_char;
+use std::ffi::CString;
 
 pub struct ExecutionEngine {
     // Need lifetimes to make this safe - need to tie
@@ -21,9 +21,10 @@ impl ExecutionEngine {
         }
     }
 
-    pub fn get_func_addr(&self, name: *const c_char) -> u64 {
+    pub fn get_func_addr(&self, name: &str) -> u64 {
         unsafe {
-            LLVMGetFunctionAddress(self.engine, name)
+            let name = CString::new(name).unwrap();
+            LLVMGetFunctionAddress(self.engine, name.as_ptr())
         }
     }
 }

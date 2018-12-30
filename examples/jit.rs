@@ -76,8 +76,8 @@ fn create_sum_module_via_builder(context: LLVMContextRef) -> LLVMModuleRef {
     let builder = Builder::new(context);
     let i64t = builder.type_i64();
     let function_type = builder.func_type(i64t, &mut [i64t, i64t, i64t]);
-    let function = builder.add_func(module, c_str!("sum"), function_type);
-    let _ = builder.new_block(function, c_str!("entry"));
+    let function = builder.add_func(module, "sum", function_type);
+    let _ = builder.new_block(function, "entry");
     let params = builder.get_params(function);
     let (x, y, z) = (params[0], params[1], params[2]);
     let sum = builder.add(x, y);
@@ -100,17 +100,17 @@ fn create_process_image_module_via_builder(context: LLVMContextRef) -> LLVMModul
         builder.type_void(),
         &mut [i8pt, i64t, i64t, i8pt, i64t, i64t]
     );
-    let function = builder.add_func(module, c_str!("process_image"), function_type);
+    let function = builder.add_func(module, "process_image", function_type);
 
-    let bb_entry = builder.new_block(function, c_str!("entry"));
-    let bb_ycond = builder.new_block(function, c_str!("y.for.cond"));
-    let bb_ybody = builder.new_block(function, c_str!("y.for.body"));
-    let bb_yinc = builder.new_block(function, c_str!("y.for.inc"));
-    let bb_yend = builder.new_block(function, c_str!("y.for.end"));
-    let bb_xcond = builder.new_block(function, c_str!("x.for.cond"));
-    let bb_xbody = builder.new_block(function, c_str!("x.for.body"));
-    let bb_xinc = builder.new_block(function, c_str!("x.for.inc"));
-    let bb_xend = builder.new_block(function, c_str!("x.for.end"));
+    let bb_entry = builder.new_block(function, "entry");
+    let bb_ycond = builder.new_block(function, "y.for.cond");
+    let bb_ybody = builder.new_block(function, "y.for.body");
+    let bb_yinc = builder.new_block(function, "y.for.inc");
+    let bb_yend = builder.new_block(function, "y.for.end");
+    let bb_xcond = builder.new_block(function, "x.for.cond");
+    let bb_xbody = builder.new_block(function, "x.for.body");
+    let bb_xinc = builder.new_block(function, "x.for.inc");
+    let bb_xend = builder.new_block(function, "x.for.end");
 
     let params = builder.get_params(function);
     // We currently just assume that src and dst have the same dimensions
@@ -121,8 +121,8 @@ fn create_process_image_module_via_builder(context: LLVMContextRef) -> LLVMModul
 
     // entry:
     builder.position_at_end(bb_entry);
-    let y = builder.alloca(i32t, c_str!("y"), 4);
-    let x = builder.alloca(i32t, c_str!("x"), 4);
+    let y = builder.alloca(i32t, "y", 4);
+    let x = builder.alloca(i32t, "x", 4);
     let ymax = builder.trunc(src_height, i32t);
     let xmax = builder.trunc(src_width, i32t);
     builder.store(builder.const_i32(0), y, 4);
@@ -241,7 +241,7 @@ fn run_process_image_example(context: LLVMContextRef, codegen: Codegen) {
         );
         let f: extern "C" fn(*const u8, usize, usize, *mut u8, usize, usize) = log_action!(
             "Function creation",
-            || mem::transmute(engine.get_func_addr(c_str!("process_image")))
+            || mem::transmute(engine.get_func_addr("process_image"))
         );
         let x = gray_image!(1, 2, 3; 4, 5, 6; 7, 8, 9);
         let mut y = GrayImage::new(3, 3);
@@ -265,7 +265,7 @@ fn run_sum_example(context: LLVMContextRef, codegen: Codegen) {
 
         let engine = ExecutionEngine::new(module);
 
-        let addr = engine.get_func_addr(c_str!("sum"));
+        let addr = engine.get_func_addr("sum");
         let f: extern "C" fn(u64, u64, u64) -> u64 = mem::transmute(addr);
         let (x, y, z) = (1, 1, 1);
         let res = f(x, y, z);

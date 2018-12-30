@@ -8,6 +8,7 @@ use llvm::prelude::*;
 use llvm::core::*;
 use llvm::*;
 use libc::c_char;
+use std::ffi::CString;
 
 fn noname() -> *const c_char {
     static CNULL: c_char = 0;
@@ -86,19 +87,23 @@ impl Builder {
     pub fn add_func(
         &self,
         module: LLVMModuleRef,
-        name: *const c_char,
+        name: &str,
         func_type: LLVMTypeRef
     ) -> LLVMValueRef {
-        unsafe { LLVMAddFunction(module, name, func_type) }
+        unsafe {
+            let name = CString::new(name).unwrap();
+            LLVMAddFunction(module, name.as_ptr(), func_type)
+        }
     }
 
     pub fn new_block(
         &self,
         function: LLVMValueRef,
-        name: *const c_char
+        name: &str
     ) -> LLVMBasicBlockRef {
         unsafe {
-            let block = LLVMAppendBasicBlockInContext(self.context, function, name);
+            let name = CString::new(name).unwrap();
+            let block = LLVMAppendBasicBlockInContext(self.context, function, name.as_ptr());
             LLVMPositionBuilderAtEnd(self.builder, block);
             block
         }
@@ -157,9 +162,10 @@ impl Builder {
         }
     }
 
-    pub fn alloca(&self, ty: LLVMTypeRef, name: *const c_char, align: u32) -> LLVMValueRef {
+    pub fn alloca(&self, ty: LLVMTypeRef, name: &str, align: u32) -> LLVMValueRef {
         unsafe {
-            let a = LLVMBuildAlloca(self.builder, ty, name);
+            let name = CString::new(name).unwrap();
+            let a = LLVMBuildAlloca(self.builder, ty, name.as_ptr());
             LLVMSetAlignment(a, align);
             a
         }
