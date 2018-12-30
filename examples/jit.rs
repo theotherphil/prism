@@ -54,110 +54,110 @@ entry:
 }";
 
 fn create_sum_module_via_builder(context: LLVMContextRef) -> LLVMModuleRef {
-    unsafe {
-        let module = LLVMModuleCreateWithNameInContext(c_str!("sum"), context);
-        let builder = Builder::new(context);
-        let i64t = builder.type_i64();
-        let function_type = builder.func_type(i64t, &mut [i64t, i64t, i64t]);
-        let function = builder.add_func(module, c_str!("sum"), function_type);
-        let _ = builder.new_block(function, c_str!("entry"));
-        let params = builder.get_params(function);
-        let (x, y, z) = (params[0], params[1], params[2]);
-        let sum = builder.add(x, y);
-        let sum = builder.add(sum, z);
-        builder.ret(sum);
-        module
-    }
+    let module = unsafe {
+        LLVMModuleCreateWithNameInContext(c_str!("sum"), context)
+    };
+    let builder = Builder::new(context);
+    let i64t = builder.type_i64();
+    let function_type = builder.func_type(i64t, &mut [i64t, i64t, i64t]);
+    let function = builder.add_func(module, c_str!("sum"), function_type);
+    let _ = builder.new_block(function, c_str!("entry"));
+    let params = builder.get_params(function);
+    let (x, y, z) = (params[0], params[1], params[2]);
+    let sum = builder.add(x, y);
+    let sum = builder.add(sum, z);
+    builder.ret(sum);
+    module
 }
 
 fn create_process_image_module_via_builder(context: LLVMContextRef) -> LLVMModuleRef {
-    unsafe {
-        let module = LLVMModuleCreateWithNameInContext(c_str!("process_image"), context);
-        let builder = Builder::new(context);
+    let module = unsafe {
+        LLVMModuleCreateWithNameInContext(c_str!("process_image"), context)
+    };
+    let builder = Builder::new(context);
 
-        let i64t = builder.type_i64();
-        let i32t = builder.type_i32();
-        let i8pt = builder.type_i8_ptr();
+    let i64t = builder.type_i64();
+    let i32t = builder.type_i32();
+    let i8pt = builder.type_i8_ptr();
 
-        let function_type = builder.func_type(
-            builder.type_void(),
-            &mut [i8pt, i64t, i64t, i8pt, i64t, i64t]
-        );
-        let function = builder.add_func(module, c_str!("process_image"), function_type);
+    let function_type = builder.func_type(
+        builder.type_void(),
+        &mut [i8pt, i64t, i64t, i8pt, i64t, i64t]
+    );
+    let function = builder.add_func(module, c_str!("process_image"), function_type);
 
-        let bb_entry = builder.new_block(function, c_str!("entry"));
-        let bb_ycond = builder.new_block(function, c_str!("y.for.cond"));
-        let bb_ybody = builder.new_block(function, c_str!("y.for.body"));
-        let bb_yinc = builder.new_block(function, c_str!("y.for.inc"));
-        let bb_yend = builder.new_block(function, c_str!("y.for.end"));
-        let bb_xcond = builder.new_block(function, c_str!("x.for.cond"));
-        let bb_xbody = builder.new_block(function, c_str!("x.for.body"));
-        let bb_xinc = builder.new_block(function, c_str!("x.for.inc"));
-        let bb_xend = builder.new_block(function, c_str!("x.for.end"));
+    let bb_entry = builder.new_block(function, c_str!("entry"));
+    let bb_ycond = builder.new_block(function, c_str!("y.for.cond"));
+    let bb_ybody = builder.new_block(function, c_str!("y.for.body"));
+    let bb_yinc = builder.new_block(function, c_str!("y.for.inc"));
+    let bb_yend = builder.new_block(function, c_str!("y.for.end"));
+    let bb_xcond = builder.new_block(function, c_str!("x.for.cond"));
+    let bb_xbody = builder.new_block(function, c_str!("x.for.body"));
+    let bb_xinc = builder.new_block(function, c_str!("x.for.inc"));
+    let bb_xend = builder.new_block(function, c_str!("x.for.end"));
 
-        let params = builder.get_params(function);
-        // We currently just assume that src and dst have the same dimensions
-        // so ignore the last two params
-        let (src, src_width, src_height, dst) = (
-            params[0], params[1], params[2], params[3]
-        );
+    let params = builder.get_params(function);
+    // We currently just assume that src and dst have the same dimensions
+    // so ignore the last two params
+    let (src, src_width, src_height, dst) = (
+        params[0], params[1], params[2], params[3]
+    );
 
     // entry:
-        builder.position_at_end(bb_entry);
-        let y = builder.alloca(i32t, c_str!("y"), 4);
-        let x = builder.alloca(i32t, c_str!("x"), 4);
-        let ymax = builder.trunc(src_height, i32t);
-        let xmax = builder.trunc(src_width, i32t);
-        builder.store(builder.const_i32(0), y, 4);
-        builder.store(builder.const_i32(0), x, 4);
-        builder.br(bb_ycond);
+    builder.position_at_end(bb_entry);
+    let y = builder.alloca(i32t, c_str!("y"), 4);
+    let x = builder.alloca(i32t, c_str!("x"), 4);
+    let ymax = builder.trunc(src_height, i32t);
+    let xmax = builder.trunc(src_width, i32t);
+    builder.store(builder.const_i32(0), y, 4);
+    builder.store(builder.const_i32(0), x, 4);
+    builder.br(bb_ycond);
     // y.for.cond:
-        builder.position_at_end(bb_ycond);
-        let tmp_y_cond = builder.load(y, 4);
-        let ycmp = builder.icmp(LLVMIntPredicate::LLVMIntSLT, tmp_y_cond, ymax);
-        builder.cond_br(ycmp, bb_ybody, bb_yend);
+    builder.position_at_end(bb_ycond);
+    let tmp_y_cond = builder.load(y, 4);
+    let ycmp = builder.icmp(LLVMIntPredicate::LLVMIntSLT, tmp_y_cond, ymax);
+    builder.cond_br(ycmp, bb_ybody, bb_yend);
     // y.for.body:
-        builder.position_at_end(bb_ybody);
-        let tmp1_y = builder.load(y, 4);
-        builder.store(builder.const_i32(0), x, 4);
-        builder.br(bb_xcond);
+    builder.position_at_end(bb_ybody);
+    let tmp1_y = builder.load(y, 4);
+    builder.store(builder.const_i32(0), x, 4);
+    builder.br(bb_xcond);
     // x.for.cond:
-        builder.position_at_end(bb_xcond);
-        let tmp_x_cond = builder.load(x, 4);
-        let xcmp = builder.icmp(LLVMIntPredicate::LLVMIntSLT, tmp_x_cond, xmax);
-        builder.cond_br(xcmp, bb_xbody, bb_xend);
+    builder.position_at_end(bb_xcond);
+    let tmp_x_cond = builder.load(x, 4);
+    let xcmp = builder.icmp(LLVMIntPredicate::LLVMIntSLT, tmp_x_cond, xmax);
+    builder.cond_br(xcmp, bb_xbody, bb_xend);
     // x.for.body:
-        builder.position_at_end(bb_xbody);
-        let tmp1_x = builder.load(x, 4);
-        let m = builder.mul(tmp1_y, xmax);
-        let off = builder.add(m, tmp1_x);
-        let sidx = builder.in_bounds_gep(src, off);
-        let didx = builder.in_bounds_gep(dst, off);
-        let val = builder.load(sidx, 1);
-        let upd = builder.add(val, builder.const_i8(3));
-        builder.store(upd, didx, 1);
-        builder.br(bb_xinc);
+    builder.position_at_end(bb_xbody);
+    let tmp1_x = builder.load(x, 4);
+    let m = builder.mul(tmp1_y, xmax);
+    let off = builder.add(m, tmp1_x);
+    let sidx = builder.in_bounds_gep(src, off);
+    let didx = builder.in_bounds_gep(dst, off);
+    let val = builder.load(sidx, 1);
+    let upd = builder.add(val, builder.const_i8(3));
+    builder.store(upd, didx, 1);
+    builder.br(bb_xinc);
     // x.for.inc:
-        builder.position_at_end(bb_xinc);
-        let tmp2_x = builder.load(x, 4);
-        let inc_x = builder.add_nsw(tmp2_x, builder.const_i32(1));
-        builder.store(inc_x, x, 4);
-        builder.br(bb_xcond);
+    builder.position_at_end(bb_xinc);
+    let tmp2_x = builder.load(x, 4);
+    let inc_x = builder.add_nsw(tmp2_x, builder.const_i32(1));
+    builder.store(inc_x, x, 4);
+    builder.br(bb_xcond);
     // y.for.inc:
-        builder.position_at_end(bb_yinc);
-        let tmp2_y = builder.load(y, 4);
-        let inc_y = builder.add_nsw(tmp2_y, builder.const_i32(1));
-        builder.store(inc_y, y, 4);
-        builder.br(bb_ycond);
+    builder.position_at_end(bb_yinc);
+    let tmp2_y = builder.load(y, 4);
+    let inc_y = builder.add_nsw(tmp2_y, builder.const_i32(1));
+    builder.store(inc_y, y, 4);
+    builder.br(bb_ycond);
     // x.for.end:
-        builder.position_at_end(bb_xend);
-        builder.br(bb_yinc);
+    builder.position_at_end(bb_xend);
+    builder.br(bb_yinc);
     // y.for.end
-        builder.position_at_end(bb_yend);
-        builder.ret_void();
+    builder.position_at_end(bb_yend);
+    builder.ret_void();
 
-        module
-    }
+    module
 }
 
 const PROCESS_IMAGE_IR: &str = "define void @process_image(
