@@ -73,117 +73,89 @@ fn create_sum_module_via_builder(context: LLVMContextRef) -> LLVMModuleRef {
 fn create_process_image_module_via_builder(context: LLVMContextRef) -> LLVMModuleRef {
     unsafe {
         let module = LLVMModuleCreateWithNameInContext(c_str!("process_image"), context);
-        let builder = LLVMCreateBuilderInContext(context);
+        let builder = Builder::new(context);
 
-        let voidt = LLVMVoidTypeInContext(context);
-        let i64t = LLVMInt64TypeInContext(context);
-        let i32t = LLVMInt32TypeInContext(context);
-        let i8t = LLVMInt8TypeInContext(context);
-        let i8pt = LLVMPointerType(i8t, 0);
-        let zero_i32 = LLVMConstInt(i32t, 0, 0);
-        let one_i32 = LLVMConstInt(i32t, 1, 0);
+        let i64t = builder.type_i64();
+        let i32t = builder.type_i32();
+        let i8pt = builder.type_i8_ptr();
 
-        let mut argts = [i8pt, i64t, i64t, i8pt, i64t, i64t];
-        let function_type = LLVMFunctionType(voidt, argts.as_mut_ptr(), argts.len() as u32, 0);
-        let function = LLVMAddFunction(module, c_str!("process_image"), function_type);
+        let function_type = builder.func_type(
+            builder.type_void(),
+            &mut [i8pt, i64t, i64t, i8pt, i64t, i64t]
+        );
+        let function = builder.add_func(module, c_str!("process_image"), function_type);
 
-        let bb_entry = LLVMAppendBasicBlockInContext(context, function, c_str!("entry"));
-        let bb_ycond = LLVMAppendBasicBlockInContext(context, function, c_str!("y.for.cond"));
-        let bb_ybody = LLVMAppendBasicBlockInContext(context, function, c_str!("y.for.body"));
-        let bb_yinc = LLVMAppendBasicBlockInContext(context, function, c_str!("y.for.inc"));
-        let bb_yend = LLVMAppendBasicBlockInContext(context, function, c_str!("y.for.end"));
-        let bb_xcond = LLVMAppendBasicBlockInContext(context, function, c_str!("x.for.cond"));
-        let bb_xbody = LLVMAppendBasicBlockInContext(context, function, c_str!("x.for.body"));
-        let bb_xinc = LLVMAppendBasicBlockInContext(context, function, c_str!("x.for.inc"));
-        let bb_xend = LLVMAppendBasicBlockInContext(context, function, c_str!("x.for.end"));
+        let bb_entry = builder.new_block(function, c_str!("entry"));
+        let bb_ycond = builder.new_block(function, c_str!("y.for.cond"));
+        let bb_ybody = builder.new_block(function, c_str!("y.for.body"));
+        let bb_yinc = builder.new_block(function, c_str!("y.for.inc"));
+        let bb_yend = builder.new_block(function, c_str!("y.for.end"));
+        let bb_xcond = builder.new_block(function, c_str!("x.for.cond"));
+        let bb_xbody = builder.new_block(function, c_str!("x.for.body"));
+        let bb_xinc = builder.new_block(function, c_str!("x.for.inc"));
+        let bb_xend = builder.new_block(function, c_str!("x.for.end"));
 
-        let src = LLVMGetParam(function, 0);
-        let src_width = LLVMGetParam(function, 1);
-        let src_height = LLVMGetParam(function, 2);
-        let dst = LLVMGetParam(function, 3);
+        let params = builder.get_params(function);
         // We currently just assume that src and dst have the same dimensions
-        //let dst_width = LLVMGetParam(function, 4);
-        //let dst_height = LLVMGetParam(function, 5);
+        // so ignore the last two params
+        let (src, src_width, src_height, dst) = (
+            params[0], params[1], params[2], params[3]
+        );
 
-        // entry:
-        LLVMPositionBuilderAtEnd(builder, bb_entry);
-        let y = LLVMBuildAlloca(builder, i32t, c_str!("y"));
-        LLVMSetAlignment(y, 4);
-        let x = LLVMBuildAlloca(builder, i32t, c_str!("x"));
-        LLVMSetAlignment(x, 4);
+    // entry:
+        builder.position_at_end(bb_entry);
+        let y = builder.alloca(i32t, c_str!("y"), 4);
+        let x = builder.alloca(i32t, c_str!("x"), 4);
+        let ymax = builder.trunc(src_height, i32t);
+        let xmax = builder.trunc(src_width, i32t);
+        builder.store(builder.const_i32(0), y, 4);
+        builder.store(builder.const_i32(0), x, 4);
+        builder.br(bb_ycond);
+    // y.for.cond:
+        builder.position_at_end(bb_ycond);
+        let tmp_y_cond = builder.load(y, 4);
+        let ycmp = builder.icmp(LLVMIntPredicate::LLVMIntSLT, tmp_y_cond, ymax);
+        builder.cond_br(ycmp, bb_ybody, bb_yend);
+    // y.for.body:
+        builder.position_at_end(bb_ybody);
+        let tmp1_y = builder.load(y, 4);
+        builder.store(builder.const_i32(0), x, 4);
+        builder.br(bb_xcond);
+    // x.for.cond:
+        builder.position_at_end(bb_xcond);
+        let tmp_x_cond = builder.load(x, 4);
+        let xcmp = builder.icmp(LLVMIntPredicate::LLVMIntSLT, tmp_x_cond, xmax);
+        builder.cond_br(xcmp, bb_xbody, bb_xend);
+    // x.for.body:
+        builder.position_at_end(bb_xbody);
+        let tmp1_x = builder.load(x, 4);
+        let m = builder.mul(tmp1_y, xmax);
+        let off = builder.add(m, tmp1_x);
+        let sidx = builder.in_bounds_gep(src, off);
+        let didx = builder.in_bounds_gep(dst, off);
+        let val = builder.load(sidx, 1);
+        let upd = builder.add(val, builder.const_i8(3));
+        builder.store(upd, didx, 1);
+        builder.br(bb_xinc);
+    // x.for.inc:
+        builder.position_at_end(bb_xinc);
+        let tmp2_x = builder.load(x, 4);
+        let inc_x = builder.add_nsw(tmp2_x, builder.const_i32(1));
+        builder.store(inc_x, x, 4);
+        builder.br(bb_xcond);
+    // y.for.inc:
+        builder.position_at_end(bb_yinc);
+        let tmp2_y = builder.load(y, 4);
+        let inc_y = builder.add_nsw(tmp2_y, builder.const_i32(1));
+        builder.store(inc_y, y, 4);
+        builder.br(bb_ycond);
+    // x.for.end:
+        builder.position_at_end(bb_xend);
+        builder.br(bb_yinc);
+    // y.for.end
+        builder.position_at_end(bb_yend);
+        builder.ret_void();
 
-        let ymax = LLVMBuildTrunc(builder, src_height, i32t, c_str!("ymax"));
-        let xmax = LLVMBuildTrunc(builder, src_width, i32t, c_str!("xmax"));
-        let s = LLVMBuildStore(builder, zero_i32, y);
-        LLVMSetAlignment(s, 4);
-        let s = LLVMBuildStore(builder, zero_i32, x);
-        LLVMSetAlignment(s, 4);
-        LLVMBuildBr(builder, bb_ycond);
-
-        // y.for.cond:
-        LLVMPositionBuilderAtEnd(builder, bb_ycond);
-        let tmp_y_cond = LLVMBuildLoad(builder, y, c_str!("tmp.y.cond"));
-        LLVMSetAlignment(tmp_y_cond, 4);
-        let ycmp = LLVMBuildICmp(builder, LLVMIntPredicate::LLVMIntSLT, tmp_y_cond, ymax, c_str!("cmp.y"));
-        LLVMBuildCondBr(builder, ycmp, bb_ybody, bb_yend);
-
-        // y.for.body:
-        LLVMPositionBuilderAtEnd(builder, bb_ybody);
-        let tmp1_y = LLVMBuildLoad(builder, y, c_str!("tmp1.y"));
-        LLVMSetAlignment(tmp1_y, 4);
-        let s = LLVMBuildStore(builder, zero_i32, x);
-        LLVMSetAlignment(s, 4);
-        LLVMBuildBr(builder, bb_xcond);
-
-        // x.for.cond:
-        LLVMPositionBuilderAtEnd(builder, bb_xcond);
-        let tmp_x_cond = LLVMBuildLoad(builder, x, c_str!("tmp.x.cond"));
-        LLVMSetAlignment(tmp_x_cond, 4);
-        let xcmp = LLVMBuildICmp(builder, LLVMIntPredicate::LLVMIntSLT, tmp_x_cond, xmax, c_str!("cmp.x"));
-        LLVMBuildCondBr(builder, xcmp, bb_xbody, bb_xend);
-
-        // x.for.body:
-        LLVMPositionBuilderAtEnd(builder, bb_xbody);
-        let tmp1_x = LLVMBuildLoad(builder, x, c_str!("tmp1.x"));
-        LLVMSetAlignment(tmp1_x, 4);
-        let m = LLVMBuildMul(builder, tmp1_y, xmax, c_str!("m"));
-        let off = LLVMBuildAdd(builder, m, tmp1_x, c_str!("off"));
-        let mut idxs = [off];
-        let sidx = LLVMBuildInBoundsGEP(builder, src, idxs.as_mut_ptr(), 1, c_str!("sidx"));
-        let didx = LLVMBuildInBoundsGEP(builder, dst, idxs.as_mut_ptr(), 1, c_str!("didx"));
-        let val = LLVMBuildLoad(builder, sidx, c_str!("val"));
-        let three_i8 = LLVMConstInt(i8t, 3, 0);
-        let upd = LLVMBuildAdd(builder, val, three_i8, c_str!("upd"));
-        LLVMBuildStore(builder, upd, didx);
-        LLVMBuildBr(builder, bb_xinc);
-
-        // x.for.inc:
-        LLVMPositionBuilderAtEnd(builder, bb_xinc);
-        let tmp2_x = LLVMBuildLoad(builder, x, c_str!("tmp2.x"));
-        LLVMSetAlignment(tmp2_x, 4);
-        let inc_x = LLVMBuildNSWAdd(builder, tmp2_x, one_i32, c_str!("inc.x"));
-        let s = LLVMBuildStore(builder, inc_x, x);
-        LLVMSetAlignment(s, 4);
-        LLVMBuildBr(builder, bb_xcond);
-
-        // y.for.inc:
-        LLVMPositionBuilderAtEnd(builder, bb_yinc);
-        let tmp2_y = LLVMBuildLoad(builder, y, c_str!("tmp2_y"));
-        LLVMSetAlignment(tmp2_y, 4);
-        let inc_y = LLVMBuildNSWAdd(builder, tmp2_y, one_i32, c_str!("inc.y"));
-        let s = LLVMBuildStore(builder, inc_y, y);
-        LLVMSetAlignment(s, 4);
-        LLVMBuildBr(builder, bb_ycond);
-
-        // x.for.end:
-        LLVMPositionBuilderAtEnd(builder, bb_xend);
-        LLVMBuildBr(builder, bb_yinc);
-
-        // y.for.end
-        LLVMPositionBuilderAtEnd(builder, bb_yend);
-        LLVMBuildRetVoid(builder);
-
-        LLVMDisposeBuilder(builder);
         module
     }
 }

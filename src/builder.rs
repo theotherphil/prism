@@ -6,6 +6,7 @@
 
 use llvm::prelude::*;
 use llvm::core::*;
+use llvm::*;
 use libc::c_char;
 
 fn noname() -> *const c_char {
@@ -41,6 +42,16 @@ macro_rules! impl_llvm_type_getter {
     };
 }
 
+macro_rules! impl_llvm_binary_op {
+    ($name:ident, $func:expr) => {
+        pub fn $name(&self, lhs: LLVMValueRef, rhs: LLVMValueRef) -> LLVMValueRef {
+            unsafe {
+                $func(self.builder, lhs, rhs, noname())
+            }
+        }
+    }
+}
+
 impl Builder {
     pub fn new(context: LLVMContextRef) -> Builder {
         unsafe {
@@ -60,6 +71,10 @@ impl Builder {
     pub fn type_i8_ptr(&self) -> LLVMTypeRef {
         unsafe { LLVMPointerType(self.type_i8(), 0) }
     }
+
+    impl_llvm_binary_op!(add, LLVMBuildAdd);
+    impl_llvm_binary_op!(add_nsw, LLVMBuildNSWAdd);
+    impl_llvm_binary_op!(mul, LLVMBuildMul);
 
     pub fn func_type(&self, ret: LLVMTypeRef, args: &mut [LLVMTypeRef]) -> LLVMTypeRef {
         unsafe {
@@ -89,10 +104,8 @@ impl Builder {
         }
     }
 
-    pub fn add(&self, lhs: LLVMValueRef, rhs: LLVMValueRef) -> LLVMValueRef {
-        unsafe {
-            LLVMBuildAdd(self.builder, lhs, rhs, noname())
-        }
+    pub fn position_at_end(&self, block: LLVMBasicBlockRef) {
+        unsafe { LLVMPositionBuilderAtEnd(self.builder, block); }
     }
 
     pub fn get_params(&self, func: LLVMValueRef) -> Vec<LLVMValueRef> {
@@ -113,5 +126,78 @@ impl Builder {
     pub fn ret(&self, value: LLVMValueRef) {
         unsafe { LLVMBuildRet(self.builder, value); }
     }
-}
 
+    pub fn store(&self, value: LLVMValueRef, ptr: LLVMValueRef, align: u32) -> LLVMValueRef {
+        unsafe {
+            let s = LLVMBuildStore(self.builder, value, ptr);
+            LLVMSetAlignment(s, align);
+            s
+        }
+    }
+
+    pub fn load(&self, ptr: LLVMValueRef, align: u32) -> LLVMValueRef {
+        unsafe {
+            let l = LLVMBuildLoad(self.builder, ptr, noname());
+            LLVMSetAlignment(l, align);
+            l
+        }
+    }
+
+    pub fn const_i32(&self, value: i32) -> LLVMValueRef {
+        unsafe {
+            const SIGN_EXTEND: LLVMBool = 0;
+            LLVMConstInt(self.type_i32(), value as ::libc::c_ulonglong, SIGN_EXTEND)
+        }
+    }
+
+    pub fn const_i8(&self, value: i8) -> LLVMValueRef {
+        unsafe {
+            const SIGN_EXTEND: LLVMBool = 0;
+            LLVMConstInt(self.type_i8(), value as ::libc::c_ulonglong, SIGN_EXTEND)
+        }
+    }
+
+    pub fn alloca(&self, ty: LLVMTypeRef, name: *const c_char, align: u32) -> LLVMValueRef {
+        unsafe {
+            let a = LLVMBuildAlloca(self.builder, ty, name);
+            LLVMSetAlignment(a, align);
+            a
+        }
+    }
+
+    pub fn br(&self, block: LLVMBasicBlockRef) -> LLVMValueRef {
+        unsafe {
+            LLVMBuildBr(self.builder, block)
+        }
+    }
+
+    pub fn cond_br(
+        &self,
+        cond: LLVMValueRef,
+        then_block: LLVMBasicBlockRef,
+        else_block: LLVMBasicBlockRef
+    ) -> LLVMValueRef {
+        unsafe {
+            LLVMBuildCondBr(self.builder, cond, then_block, else_block)
+        }
+    }
+
+    pub fn trunc(&self, value: LLVMValueRef, ty: LLVMTypeRef) -> LLVMValueRef {
+        unsafe {
+            LLVMBuildTrunc(self.builder, value, ty, noname())
+        }
+    }
+
+    pub fn icmp(&self, op: LLVMIntPredicate, lhs: LLVMValueRef, rhs: LLVMValueRef) -> LLVMValueRef {
+        unsafe {
+            LLVMBuildICmp(self.builder, op, lhs, rhs, noname())
+        }
+    }
+
+    pub fn in_bounds_gep(&self, ptr: LLVMValueRef, offset: LLVMValueRef) -> LLVMValueRef {
+        unsafe {
+            let mut indices = [offset];
+            LLVMBuildInBoundsGEP(self.builder, ptr, indices.as_mut_ptr(), 1, noname())
+        }
+    }
+}
