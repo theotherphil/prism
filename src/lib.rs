@@ -16,6 +16,7 @@ pub mod traits;
 pub mod blur3;
 #[macro_use]
 pub mod codegen;
+pub mod ast;
 
 pub use crate::buffer::*;
 pub use crate::io::*;
