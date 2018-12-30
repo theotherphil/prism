@@ -16,6 +16,11 @@ macro_rules! c_try {
     ($f:expr, $message:expr) => { if $f() != 0 { panic!($message); } };
 }
 
+/// Creates a nul-terminated c string literal
+macro_rules! c_str {
+    ($s:expr) => { concat!($s, "\0").as_ptr() as *const _ };
+}
+
 /// Do the global setup necessary to create execution engines which compile to native code
 fn initialise_jit() {
     unsafe {
@@ -54,24 +59,24 @@ entry:
 
 fn create_sum_module_via_builder(context: LLVMContextRef) -> LLVMModuleRef {
     unsafe {
-        let module = LLVMModuleCreateWithNameInContext(b"sum\0".as_ptr() as *const _, context);
+        let module = LLVMModuleCreateWithNameInContext(c_str!("sum"), context);
         let builder = LLVMCreateBuilderInContext(context);
         // get a type for sum function
         let i64t = LLVMInt64TypeInContext(context);
         let mut argts = [i64t, i64t, i64t];
         let function_type = LLVMFunctionType(i64t, argts.as_mut_ptr(), argts.len() as u32, 0);
         // add it to our module
-        let function = LLVMAddFunction(module, b"sum\0".as_ptr() as *const _, function_type);
+        let function = LLVMAddFunction(module, c_str!("sum"), function_type);
         // Create a basic block in the function and set our builder to generate
         // code in it.
-        let bb = LLVMAppendBasicBlockInContext(context, function, b"entry\0".as_ptr() as *const _);
+        let bb = LLVMAppendBasicBlockInContext(context, function, c_str!("entry"));
         LLVMPositionBuilderAtEnd(builder, bb);
         // get the function's arguments
         let x = LLVMGetParam(function, 0);
         let y = LLVMGetParam(function, 1);
         let z = LLVMGetParam(function, 2);
-        let sum = LLVMBuildAdd(builder, x, y, b"sum.1\0".as_ptr() as *const _);
-        let sum = LLVMBuildAdd(builder, sum, z, b"sum.2\0".as_ptr() as *const _);
+        let sum = LLVMBuildAdd(builder, x, y, c_str!("sum.1"));
+        let sum = LLVMBuildAdd(builder, sum, z, c_str!("sum.2"));
         LLVMBuildRet(builder, sum);
         LLVMDisposeBuilder(builder);
         module
@@ -80,7 +85,7 @@ fn create_sum_module_via_builder(context: LLVMContextRef) -> LLVMModuleRef {
 
 fn create_process_image_module_via_builder(context: LLVMContextRef) -> LLVMModuleRef {
     unsafe {
-        let module = LLVMModuleCreateWithNameInContext(b"process_image\0".as_ptr() as *const _, context);
+        let module = LLVMModuleCreateWithNameInContext(c_str!("process_image"), context);
         let builder = LLVMCreateBuilderInContext(context);
 
         let voidt = LLVMVoidTypeInContext(context);
@@ -93,17 +98,17 @@ fn create_process_image_module_via_builder(context: LLVMContextRef) -> LLVMModul
 
         let mut argts = [i8pt, i64t, i64t, i8pt, i64t, i64t];
         let function_type = LLVMFunctionType(voidt, argts.as_mut_ptr(), argts.len() as u32, 0);
-        let function = LLVMAddFunction(module, b"process_image\0".as_ptr() as *const _, function_type);
+        let function = LLVMAddFunction(module, c_str!("process_image"), function_type);
 
-        let bb_entry = LLVMAppendBasicBlockInContext(context, function, b"entry\0".as_ptr() as *const _);
-        let bb_ycond = LLVMAppendBasicBlockInContext(context, function, b"y.for.cond\0".as_ptr() as *const _);
-        let bb_ybody = LLVMAppendBasicBlockInContext(context, function, b"y.for.body\0".as_ptr() as *const _);
-        let bb_yinc = LLVMAppendBasicBlockInContext(context, function, b"y.for.inc\0".as_ptr() as *const _);
-        let bb_yend = LLVMAppendBasicBlockInContext(context, function, b"y.for.end\0".as_ptr() as *const _);
-        let bb_xcond = LLVMAppendBasicBlockInContext(context, function, b"x.for.cond\0".as_ptr() as *const _);
-        let bb_xbody = LLVMAppendBasicBlockInContext(context, function, b"x.for.body\0".as_ptr() as *const _);
-        let bb_xinc = LLVMAppendBasicBlockInContext(context, function, b"x.for.inc\0".as_ptr() as *const _);
-        let bb_xend = LLVMAppendBasicBlockInContext(context, function, b"x.for.end\0".as_ptr() as *const _);
+        let bb_entry = LLVMAppendBasicBlockInContext(context, function, c_str!("entry"));
+        let bb_ycond = LLVMAppendBasicBlockInContext(context, function, c_str!("y.for.cond"));
+        let bb_ybody = LLVMAppendBasicBlockInContext(context, function, c_str!("y.for.body"));
+        let bb_yinc = LLVMAppendBasicBlockInContext(context, function, c_str!("y.for.inc"));
+        let bb_yend = LLVMAppendBasicBlockInContext(context, function, c_str!("y.for.end"));
+        let bb_xcond = LLVMAppendBasicBlockInContext(context, function, c_str!("x.for.cond"));
+        let bb_xbody = LLVMAppendBasicBlockInContext(context, function, c_str!("x.for.body"));
+        let bb_xinc = LLVMAppendBasicBlockInContext(context, function, c_str!("x.for.inc"));
+        let bb_xend = LLVMAppendBasicBlockInContext(context, function, c_str!("x.for.end"));
 
         let src = LLVMGetParam(function, 0);
         let src_width = LLVMGetParam(function, 1);
@@ -115,60 +120,60 @@ fn create_process_image_module_via_builder(context: LLVMContextRef) -> LLVMModul
 
         // entry:
         LLVMPositionBuilderAtEnd(builder, bb_entry);
-        let y = LLVMBuildAlloca(builder, i32t, b"y\0".as_ptr() as *const _);
+        let y = LLVMBuildAlloca(builder, i32t, c_str!("y"));
         LLVMSetAlignment(y, 4);
-        let x = LLVMBuildAlloca(builder, i32t, b"x\0".as_ptr() as *const _);
+        let x = LLVMBuildAlloca(builder, i32t, c_str!("x"));
         LLVMSetAlignment(x, 4);
 
-        let ymax = LLVMBuildTrunc(builder, src_height, i32t, b"ymax\0".as_ptr() as *const _);
-        let xmax = LLVMBuildTrunc(builder, src_width, i32t, b"xmax\0".as_ptr() as *const _);
+        let ymax = LLVMBuildTrunc(builder, src_height, i32t, c_str!("ymax"));
+        let xmax = LLVMBuildTrunc(builder, src_width, i32t, c_str!("xmax"));
         LLVMBuildStore(builder, zero_i32, y);
         LLVMBuildStore(builder, zero_i32, x);
         LLVMBuildBr(builder, bb_ycond);
 
         // y.for.cond:
         LLVMPositionBuilderAtEnd(builder, bb_ycond);
-        let tmp_y_cond = LLVMBuildLoad(builder, y, b"tmp.y.cond\0".as_ptr() as *const _);
-        let ycmp = LLVMBuildICmp(builder, LLVMIntPredicate::LLVMIntSLT, tmp_y_cond, ymax, b"cmp.y\0".as_ptr() as *const _);
+        let tmp_y_cond = LLVMBuildLoad(builder, y, c_str!("tmp.y.cond"));
+        let ycmp = LLVMBuildICmp(builder, LLVMIntPredicate::LLVMIntSLT, tmp_y_cond, ymax, c_str!("cmp.y"));
         LLVMBuildCondBr(builder, ycmp, bb_ybody, bb_yend);
 
         // y.for.body:
         LLVMPositionBuilderAtEnd(builder, bb_ybody);
-        let tmp1_y = LLVMBuildLoad(builder, y, b"tmp1.y\0".as_ptr() as *const _);
+        let tmp1_y = LLVMBuildLoad(builder, y, c_str!("tmp1.y"));
         LLVMBuildStore(builder, zero_i32, x);
         LLVMBuildBr(builder, bb_xcond);
 
         // x.for.cond:
         LLVMPositionBuilderAtEnd(builder, bb_xcond);
-        let tmp_x_cond = LLVMBuildLoad(builder, y, b"tmp.x.cond\0".as_ptr() as *const _);
-        let xcmp = LLVMBuildICmp(builder, LLVMIntPredicate::LLVMIntSLT, tmp_x_cond, xmax, b"cmp.x\0".as_ptr() as *const _);
+        let tmp_x_cond = LLVMBuildLoad(builder, y, c_str!("tmp.x.cond"));
+        let xcmp = LLVMBuildICmp(builder, LLVMIntPredicate::LLVMIntSLT, tmp_x_cond, xmax, c_str!("cmp.x"));
         LLVMBuildCondBr(builder, xcmp, bb_xbody, bb_xend);
 
         // x.for.body:
         LLVMPositionBuilderAtEnd(builder, bb_xbody);
-        let tmp1_x = LLVMBuildLoad(builder, x, b"tmp1.x\0".as_ptr() as *const _);
-        let m = LLVMBuildMul(builder, tmp1_y, xmax, b"m\0".as_ptr() as *const _);
-        let off = LLVMBuildAdd(builder, m, tmp1_x, b"off\0".as_ptr() as *const _);
+        let tmp1_x = LLVMBuildLoad(builder, x, c_str!("tmp1.x"));
+        let m = LLVMBuildMul(builder, tmp1_y, xmax, c_str!("m"));
+        let off = LLVMBuildAdd(builder, m, tmp1_x, c_str!("off"));
         let mut idxs = [off];
-        let sidx = LLVMBuildInBoundsGEP(builder, src, idxs.as_mut_ptr(), 1, b"sidx\0".as_ptr() as *const _);
-        let didx = LLVMBuildInBoundsGEP(builder, dst, idxs.as_mut_ptr(), 1, b"didx\0".as_ptr() as *const _);
-        let val = LLVMBuildLoad(builder, sidx, b"val\0".as_ptr() as *const _);
+        let sidx = LLVMBuildInBoundsGEP(builder, src, idxs.as_mut_ptr(), 1, c_str!("sidx"));
+        let didx = LLVMBuildInBoundsGEP(builder, dst, idxs.as_mut_ptr(), 1, c_str!("didx"));
+        let val = LLVMBuildLoad(builder, sidx, c_str!("val"));
         let three_i8 = LLVMConstInt(i8t, 3, 0);
-        let upd = LLVMBuildAdd(builder, val, three_i8, b"upd\0".as_ptr() as *const _);
+        let upd = LLVMBuildAdd(builder, val, three_i8, c_str!("upd"));
         LLVMBuildStore(builder, upd, didx);
         LLVMBuildBr(builder, bb_xinc);
 
         // x.for.inc:
         LLVMPositionBuilderAtEnd(builder, bb_xinc);
-        let tmp2_x = LLVMBuildLoad(builder, x, b"tmp2.x\0".as_ptr() as *const _);
-        let inc_x = LLVMBuildNSWAdd(builder, tmp2_x, one_i32, b"inc.x\0".as_ptr() as *const _);
+        let tmp2_x = LLVMBuildLoad(builder, x, c_str!("tmp2.x"));
+        let inc_x = LLVMBuildNSWAdd(builder, tmp2_x, one_i32, c_str!("inc.x"));
         LLVMBuildStore(builder, inc_x, x);
         LLVMBuildBr(builder, bb_xcond);
 
         // y.for.inc:
         LLVMPositionBuilderAtEnd(builder, bb_yinc);
-        let tmp2_y = LLVMBuildLoad(builder, y, b"tmp2_y\0".as_ptr() as *const _);
-        let inc_y = LLVMBuildNSWAdd(builder, tmp2_y, one_i32, b"inc.y\0".as_ptr() as *const _);
+        let tmp2_y = LLVMBuildLoad(builder, y, c_str!("tmp2_y"));
+        let inc_y = LLVMBuildNSWAdd(builder, tmp2_y, one_i32, c_str!("inc.y"));
         LLVMBuildStore(builder, inc_y, y);
         LLVMBuildBr(builder, bb_ycond);
 
@@ -251,7 +256,7 @@ fn run_process_image_example(codegen: Codegen) {
         LLVMCreateExecutionEngineForModule(&mut ee, module, &mut out);
         println!("Execution engine creation: COMPLETE");
         println!("Function creation: PENDING");
-        let addr = LLVMGetFunctionAddress(ee, b"process_image\0".as_ptr() as *const _);
+        let addr = LLVMGetFunctionAddress(ee, c_str!("process_image"));
         let f: extern "C" fn(*const u8, usize, usize, *mut u8, usize, usize) = mem::transmute(addr);
         println!("Function creation: COMPLETE");
         let x = gray_image!(1, 2, 3; 4, 5, 6; 7, 8, 9);
@@ -279,7 +284,7 @@ fn run_sum_example(codegen: Codegen) {
         let mut out = mem::zeroed();
         LLVMCreateExecutionEngineForModule(&mut ee, module, &mut out);
 
-        let addr = LLVMGetFunctionAddress(ee, b"sum\0".as_ptr() as *const _);
+        let addr = LLVMGetFunctionAddress(ee, c_str!("sum"));
         let f: extern "C" fn(u64, u64, u64) -> u64 = mem::transmute(addr);
         let (x, y, z) = (1, 1, 1);
         let res = f(x, y, z);
