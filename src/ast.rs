@@ -95,13 +95,13 @@ impl PrettyPrint for VarExpr {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Access {
     /// The stage from which we're reading
-    source: String,
+    pub(crate) source: String,
     /// The x-coordinate to read from, in terms of
     /// variables X and Y.
-    x: VarExpr,
+    pub(crate) x: VarExpr,
     /// The y-coordinate to read from, in terms of
     /// variables X and Y.
-    y: VarExpr
+    pub(crate) y: VarExpr
 }
 
 impl Access {
@@ -126,6 +126,8 @@ impl PrettyPrint for Access {
 pub enum Definition {
     Access(Access),
     Const(i8),
+    // TODO: share code for printing and lowering arithmetic expressions
+    // TODO: between VarExpr and Definition
     Add(Box<Definition>, Box<Definition>),
     Mul(Box<Definition>, Box<Definition>),
     Sub(Box<Definition>, Box<Definition>),
@@ -187,8 +189,8 @@ impl PrettyPrint for Definition {
 }
 
 pub struct Func {
-    name: String,
-    definition: Definition
+    pub(crate) name: String,
+    pub(crate) definition: Definition
 }
 
 impl Func {

@@ -77,6 +77,8 @@ impl Builder {
     impl_llvm_binary_op!(add, LLVMBuildAdd);
     impl_llvm_binary_op!(add_nsw, LLVMBuildNSWAdd);
     impl_llvm_binary_op!(mul, LLVMBuildMul);
+    impl_llvm_binary_op!(sub, LLVMBuildSub);
+    impl_llvm_binary_op!(sdiv, LLVMBuildSDiv);
 
     pub fn func_type(&self, ret: LLVMTypeRef, args: &mut [LLVMTypeRef]) -> LLVMTypeRef {
         unsafe {
