@@ -9,16 +9,12 @@ use llvm::target::*;
 use llvm::ir_reader::*;
 use std::ffi::CString;
 use prism::*;
+use prism::builder::*;
 
 /// Call a function that returns an integer error code and panic
 /// if the result is non-zero
 macro_rules! c_try {
     ($f:expr, $message:expr) => { if $f() != 0 { panic!($message); } };
-}
-
-/// Creates a nul-terminated c string literal
-macro_rules! c_str {
-    ($s:expr) => { concat!($s, "\0").as_ptr() as *const _ };
 }
 
 /// Do the global setup necessary to create execution engines which compile to native code
@@ -60,25 +56,16 @@ entry:
 fn create_sum_module_via_builder(context: LLVMContextRef) -> LLVMModuleRef {
     unsafe {
         let module = LLVMModuleCreateWithNameInContext(c_str!("sum"), context);
-        let builder = LLVMCreateBuilderInContext(context);
-        // get a type for sum function
-        let i64t = LLVMInt64TypeInContext(context);
-        let mut argts = [i64t, i64t, i64t];
-        let function_type = LLVMFunctionType(i64t, argts.as_mut_ptr(), argts.len() as u32, 0);
-        // add it to our module
-        let function = LLVMAddFunction(module, c_str!("sum"), function_type);
-        // Create a basic block in the function and set our builder to generate
-        // code in it.
-        let bb = LLVMAppendBasicBlockInContext(context, function, c_str!("entry"));
-        LLVMPositionBuilderAtEnd(builder, bb);
-        // get the function's arguments
-        let x = LLVMGetParam(function, 0);
-        let y = LLVMGetParam(function, 1);
-        let z = LLVMGetParam(function, 2);
-        let sum = LLVMBuildAdd(builder, x, y, c_str!("sum.1"));
-        let sum = LLVMBuildAdd(builder, sum, z, c_str!("sum.2"));
-        LLVMBuildRet(builder, sum);
-        LLVMDisposeBuilder(builder);
+        let builder = Builder::new(context);
+        let i64t = builder.type_i64();
+        let function_type = builder.func_type(i64t, &mut [i64t, i64t, i64t]);
+        let function = builder.add_func(module, c_str!("sum"), function_type);
+        let _ = builder.new_block(function, c_str!("entry"));
+        let params = builder.get_params(function);
+        let (x, y, z) = (params[0], params[1], params[2]);
+        let sum = builder.add(x, y);
+        let sum = builder.add(sum, z);
+        builder.ret(sum);
         module
     }
 }
