@@ -1,7 +1,7 @@
-#![allow(dead_code)]
 
 use std::fmt;
 use std::ops::{Add, Div, Mul, Sub};
+use crate::pretty_print::*;
 
 // [NOTE: AST terminology]
 //
@@ -18,7 +18,7 @@ use std::ops::{Add, Div, Mul, Sub};
 //                      Definition
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum Var { X, Y }
+pub enum Var { X, Y }
 
 impl fmt::Display for Var {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
@@ -32,7 +32,7 @@ impl fmt::Display for Var {
 
 /// An expression defining the coordinate to access an input image at.
 #[derive(Debug, Clone, PartialEq, Eq)]
-enum VarExpr {
+pub enum VarExpr {
     Var(Var),
     Const(i32),
     Add(Box<VarExpr>, Box<VarExpr>),
@@ -70,34 +70,8 @@ impl_var_expr_bin_op!(Sub, sub, VarExpr::Sub);
 impl_var_expr_bin_op!(Mul, mul, VarExpr::Mul);
 
 // We could also define static X and Y variables
-const fn x() -> VarExpr { VarExpr::Var(Var::X) }
-const fn y() -> VarExpr { VarExpr::Var(Var::Y) }
-
-trait PrettyPrint {
-    fn pretty_print(&self) -> String;
-    fn is_leaf(&self) -> bool;
-}
-
-fn combine_with_op<P: PrettyPrint>(op: &str, left: &P, right: &P) -> String {
-    let left = pretty_print_with_parens(left);
-    let right = pretty_print_with_parens(right);
-    format!("{} {} {}", left, op, right)
-}
-
-fn pretty_print_with_parens<P: PrettyPrint>(p: &P) -> String {
-    let pp = p.pretty_print();
-    if p.is_leaf() { pp } else { format!("({})", pp) }
-}
-
-impl<P: PrettyPrint> PrettyPrint for Box<P> {
-    fn pretty_print(&self) -> String {
-        (**self).pretty_print()
-    }
-
-    fn is_leaf(&self) -> bool {
-        (**self).is_leaf()
-    }
-}
+pub const fn x() -> VarExpr { VarExpr::Var(Var::X) }
+pub const fn y() -> VarExpr { VarExpr::Var(Var::Y) }
 
 impl PrettyPrint for VarExpr {
     fn pretty_print(&self) -> String {
@@ -119,7 +93,7 @@ impl PrettyPrint for VarExpr {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-struct Access {
+pub struct Access {
     /// The stage from which we're reading
     source: String,
     /// The x-coordinate to read from, in terms of
@@ -131,7 +105,7 @@ struct Access {
 }
 
 impl Access {
-    fn new(source: &str, x: VarExpr, y: VarExpr) -> Access {
+    pub fn new(source: &str, x: VarExpr, y: VarExpr) -> Access {
         let source = source.to_string();
         Access { source, x, y }
     }
@@ -149,7 +123,7 @@ impl PrettyPrint for Access {
 
 /// An expression defining the value to set an image pixel to
 #[derive(Debug, Clone)]
-enum Definition {
+pub enum Definition {
     Access(Access),
     Const(i8),
     Add(Box<Definition>, Box<Definition>),
@@ -188,7 +162,7 @@ impl_definition_bin_op!(Sub, sub, Definition::Sub);
 impl_definition_bin_op!(Mul, mul, Definition::Mul);
 impl_definition_bin_op!(Div, div, Definition::Div);
 
-fn read(source: &str, x: VarExpr, y: VarExpr) -> Definition {
+pub fn read(source: &str, x: VarExpr, y: VarExpr) -> Definition {
     Definition::Access(Access::new(source, x, y))
 }
 
@@ -212,13 +186,13 @@ impl PrettyPrint for Definition {
     }
 }
 
-struct Func {
+pub struct Func {
     name: String,
     definition: Definition
 }
 
 impl Func {
-    fn new(name: &str, definition: &Definition) -> Func {
+    pub fn new(name: &str, definition: &Definition) -> Func {
         Func {
             name: name.to_string(),
             definition: definition.clone()
