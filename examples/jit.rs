@@ -1,3 +1,8 @@
+
+// To shut up the warning when log_action is used
+// for a function with void return type.
+#![allow(path_statements)]
+
 extern crate llvm_sys as llvm;
 
 use std::mem;
@@ -15,6 +20,17 @@ use prism::builder::*;
 /// if the result is non-zero
 macro_rules! c_try {
     ($f:expr, $message:expr) => { if $f() != 0 { panic!($message); } };
+}
+
+macro_rules! log_action {
+    ($name:expr, $action:expr) => {{
+        print!($name);
+        println!(": PENDING");
+        let r = $action();
+        print!($name);
+        println!(": COMPLETE");
+        r
+    }};
 }
 
 /// Do the global setup necessary to create execution engines which compile to native code
@@ -222,18 +238,20 @@ fn run_process_image_example(codegen: Codegen) {
         LLVMDumpModule(module);
         let mut ee = mem::uninitialized();
         let mut out = mem::zeroed();
-        println!("Execution engine creation: PENDING");
-        LLVMCreateExecutionEngineForModule(&mut ee, module, &mut out);
-        println!("Execution engine creation: COMPLETE");
-        println!("Function creation: PENDING");
-        let addr = LLVMGetFunctionAddress(ee, c_str!("process_image"));
-        let f: extern "C" fn(*const u8, usize, usize, *mut u8, usize, usize) = mem::transmute(addr);
-        println!("Function creation: COMPLETE");
+        log_action!(
+            "Execution engine creation",
+            || LLVMCreateExecutionEngineForModule(&mut ee, module, &mut out)
+        );
+        let f: extern "C" fn(*const u8, usize, usize, *mut u8, usize, usize) = log_action!(
+            "Function creation",
+            || mem::transmute(LLVMGetFunctionAddress(ee, c_str!("process_image")))
+        );
         let x = gray_image!(1, 2, 3; 4, 5, 6; 7, 8, 9);
         let mut y = GrayImage::new(3, 3);
-        println!("Function execution: PENDING");
-        f(x.buffer.as_ptr(), 3, 3, y.buffer.as_mut_ptr(), 3, 3);
-        println!("Function execution: COMPLETE");
+        log_action! (
+            "Function execution",
+            || f(x.buffer.as_ptr(), 3, 3, y.buffer.as_mut_ptr(), 3, 3)
+        );
         println!("map(+3, {:?}) = {:?}", x, y);
         LLVMDisposeExecutionEngine(ee);
         LLVMContextDispose(context);
