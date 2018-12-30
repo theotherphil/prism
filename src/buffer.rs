@@ -23,9 +23,9 @@ impl Factory for BufferFactory {
 // TODO: the initial segment of length width * height
 #[derive(Clone, PartialEq, Eq)]
 pub struct ImageBuffer<T> {
-    width: usize,
-    height: usize,
-    buffer: Vec<T>
+    pub width: usize,
+    pub height: usize,
+    pub buffer: Vec<T>
 }
 
 pub type GrayImage = ImageBuffer<u8>;

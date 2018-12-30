@@ -1,27 +1,26 @@
 extern crate llvm_sys as llvm;
 
 use std::mem;
-
 use llvm::prelude::*;
 use llvm::core::*;
 use llvm::execution_engine::*;
 use llvm::target::*;
 use llvm::ir_reader::*;
-
 use std::ffi::CString;
+use prism::*;
+
+/// Call a function that returns an integer error code and panic
+/// if the result is non-zero
+macro_rules! c_try {
+    ($f:expr, $message:expr) => { if $f() != 0 { panic!($message); } };
+}
 
 /// Do the global setup necessary to create execution engines which compile to native code
 fn initialise_jit() {
     unsafe {
         LLVMLinkInMCJIT();
-        let res = LLVM_InitializeNativeTarget();
-        if res != 0 {
-            panic!("Failed to initialise native target");
-        }
-        let res = LLVM_InitializeNativeAsmPrinter();
-        if res != 0 {
-            panic!("Failed to initialise native assembly printer");
-        }
+        c_try!(LLVM_InitializeNativeTarget, "Failed to initialise native target");
+        c_try!(LLVM_InitializeNativeAsmPrinter, "Failed to initialise native assembly printer");
     }
 }
 
@@ -45,15 +44,12 @@ fn create_module_from_handwritten_ir(context: LLVMContextRef, ir: &str) -> LLVMM
     }
 }
 
-fn create_sum_module_from_handwritten_ir(context: LLVMContextRef) -> LLVMModuleRef {
-    let ir = "define i64 @sum(i64, i64, i64) {
+const SUM_IR: &str = "define i64 @sum(i64, i64, i64) {
 entry:
     %sum.1 = add i64 %0, %1
     %sum.2 = add i64 %sum.1, %2
     ret i64 %sum.2
 }";
-    create_module_from_handwritten_ir(context, ir)
-}
 
 fn create_sum_module_via_builder(context: LLVMContextRef) -> LLVMModuleRef {
     unsafe {
@@ -83,9 +79,7 @@ fn create_sum_module_via_builder(context: LLVMContextRef) -> LLVMModuleRef {
     }
 }
 
-fn create_process_image_module_from_handwritten_ir(context: LLVMContextRef) -> LLVMModuleRef {
-    let ir =
-"define void @process_image(
+const PROCESS_IMAGE_IR: &str = "define void @process_image(
     i8* nocapture readonly %src, i64 %src_width, i64 %src_height,
     i8* nocapture %dst, i64 %dst_width, i64 %dst_height) {
 ; TODO: try using phi nodes instead of alloca for loop variables
@@ -135,65 +129,14 @@ x.for.end:
 y.for.end:
   ret void
 }";
-    create_module_from_handwritten_ir(context, ir)
-}
 
-fn create_loop1_module_from_handwritten_ir(context: LLVMContextRef) -> LLVMModuleRef {
-    let ir =
-"define void @loop1(i8* nocapture readonly %src, i8* nocapture %dst, i64 %len)
-{
-entry:
-  %i = alloca i32, align 4
-  %bound = trunc i64 %len to i32
-  store i32 0, i32* %i, align 4
-  br label %for.cond
-for.cond:
-  %0 = load i32, i32* %i, align 4
-  %cmp = icmp slt i32 %0, %bound
-  br i1 %cmp, label %for.body, label %for.end
-for.body:
-  %1 = load i32, i32* %i, align 4
-  %sidx = getelementptr i8, i8* %src, i32 %1
-  %didx = getelementptr i8, i8* %dst, i32 %1
-  %val = load i8, i8* %sidx
-  %upd = add i8 %val, 3
-  store i8 %upd, i8* %didx
-  br label %for.inc
-for.inc:
-  %2 = load i32, i32* %i, align 4
-  %inc = add nsw i32 %2, 1
-  store i32 %inc, i32* %i, align 4
-  br label %for.cond
-for.end:
-  ret void
-}";
-    create_module_from_handwritten_ir(context, ir)
-}
-
-fn loop_1d_example() {
+fn run_process_image_example(codegen: Codegen) {
     unsafe {
         let context = LLVMContextCreate();
-        let module = create_loop1_module_from_handwritten_ir(context);
-        let mut ee = mem::uninitialized();
-        let mut out = mem::zeroed();
-        println!("Creating execution engine from module");
-        LLVMCreateExecutionEngineForModule(&mut ee, module, &mut out);
-        println!("Created execution engine from module");
-        let addr = LLVMGetFunctionAddress(ee, b"loop1\0".as_ptr() as *const _);
-        let f: extern "C" fn(*const u8, *mut u8, usize) = mem::transmute(addr);
-        let x = [1, 2, 3];
-        let mut y = [0u8; 3];
-        f(x.as_ptr(), y.as_mut_ptr(), x.len());
-        println!("map(+3, {:?}) = {:?}", x, y);
-        LLVMDisposeExecutionEngine(ee);
-        LLVMContextDispose(context);
-    }
-}
-
-fn process_image_example() {
-    unsafe {
-        let context = LLVMContextCreate();
-        let module = create_process_image_module_from_handwritten_ir(context);
+        let module = match codegen {
+            Codegen::Handwritten => create_module_from_handwritten_ir(context, PROCESS_IMAGE_IR),
+            Codegen::Builder => panic!("not yet implemented")
+        };
         let mut ee = mem::uninitialized();
         let mut out = mem::zeroed();
         println!("Execution engine creation: PENDING");
@@ -203,10 +146,10 @@ fn process_image_example() {
         let addr = LLVMGetFunctionAddress(ee, b"process_image\0".as_ptr() as *const _);
         let f: extern "C" fn(*const u8, usize, usize, *mut u8, usize, usize) = mem::transmute(addr);
         println!("Function creation: COMPLETE");
-        let x = [1, 2, 3, 4, 5, 6, 7, 8, 9];
-        let mut y = [0u8; 8];
+        let x = gray_image!(1, 2, 3; 4, 5, 6; 7, 8, 9);
+        let mut y = GrayImage::new(3, 3);
         println!("Function execution: PENDING");
-        f(x.as_ptr(), 3, 3, y.as_mut_ptr(), 3, 3);
+        f(x.buffer.as_ptr(), 3, 3, y.buffer.as_mut_ptr(), 3, 3);
         println!("Function execution: COMPLETE");
         println!("map(+3, {:?}) = {:?}", x, y);
         LLVMDisposeExecutionEngine(ee);
@@ -214,13 +157,12 @@ fn process_image_example() {
     }
 }
 
-fn jit_sum_example(variation: Variation) {
+fn run_sum_example(codegen: Codegen) {
     unsafe {
         let context = LLVMContextCreate();
-        let module = match variation {
-            Variation::Handwritten => create_sum_module_from_handwritten_ir(context),
-            Variation::Jit => create_sum_module_via_builder(context),
-            _ => panic!("Nope")
+        let module = match codegen {
+            Codegen::Handwritten => create_module_from_handwritten_ir(context, SUM_IR),
+            Codegen::Builder => create_sum_module_via_builder(context),
         };
         // Dump the module as IR to stdout.
         LLVMDumpModule(module);
@@ -240,41 +182,56 @@ fn jit_sum_example(variation: Variation) {
     }
 }
 
+/// Whether to use handwritten IR or an LLVM builder
 #[derive(Copy, Clone, PartialEq, Eq, Debug)]
-enum Variation {
+enum Codegen {
     Handwritten,
-    Jit,
-    Loop1d,
+    Builder
+}
+
+/// Which example to use
+#[derive(Copy, Clone, PartialEq, Eq, Debug)]
+enum Example {
+    Sum,
     ProcessImage
 }
 
 use structopt::StructOpt;
 
-fn variation_from_str(d: &str) -> Variation {
+fn codegen_from_str(d: &str) -> Codegen {
     match d {
-        "hand" => Variation::Handwritten,
-        "jit" => Variation::Jit,
-        "1d" => Variation::Loop1d,
-        "image" => Variation::ProcessImage,
-        _ => panic!("invalid Variation variant")
+        "handwritten" => Codegen::Handwritten,
+        "builder" => Codegen::Builder,
+        _ => panic!("invalid codegen flag")
+    }
+}
+
+fn example_from_str(d: &str) -> Example {
+    match d {
+        "sum" => Example::Sum,
+        "image" => Example::ProcessImage,
+        _ => panic!("invalid example flag")
     }
 }
 
 #[derive(StructOpt, Debug)]
 struct Opts {
-    #[structopt(short = "v", long = "variation")]
-    variation: String
+    #[structopt(short = "e", long = "example")]
+    example: String,
+
+    #[structopt(short = "c", long = "codegen")]
+    codegen: String,
 }
 
 fn main() {
     initialise_jit();
     
     let opts = Opts::from_args();
-    let variation = variation_from_str(&opts.variation);
-    match variation {
-        Variation::Loop1d => loop_1d_example(),
-        Variation::ProcessImage => process_image_example(),
-        _ => jit_sum_example(variation)
-    }
+    let example = example_from_str(&opts.example);
+    let codegen = codegen_from_str(&opts.codegen);
+    match example {
+        Example::Sum => run_sum_example(codegen),
+        Example::ProcessImage => run_process_image_example(codegen)
+    };
 }
 
