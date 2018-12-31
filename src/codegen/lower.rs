@@ -185,51 +185,37 @@ pub fn create_process_image_module(context: &Context, func: &Func) -> Module {
         params[0], params[1], params[2], params[3]
     );
 
-    let mut symbols = SymbolTable::new();
-    symbols.add("src", src);
-    symbols.add("dst", dst);
-    symbols.add("src_width", src_width);
-
     let entry = builder.new_block(llvm_func, "entry");
     builder.position_at_end(entry);
     let y_max = builder.trunc(src_height, builder.type_i32());
     let x_max = builder.trunc(src_width, builder.type_i32());
-    symbols.add("y_max", y_max);
-    symbols.add("x_max", x_max);
 
-    let generate_y_body = |symbols| {
-        generate_x_loop(&builder, func, llvm_func, symbols)
+    let generate_x_body = |symbols: &mut SymbolTable| {
+        lower_func(
+            &builder,
+            func,
+            src,
+            dst,
+            x_max,
+            symbols.get("x"),
+            symbols.get("y")
+        );
     };
-    generate_loop(&builder, "y", "y_max", llvm_func, &mut symbols, generate_y_body);
+    let generate_y_body = |symbols| {
+        generate_loop(&builder, "x", x_max, llvm_func, symbols, generate_x_body);
+    };
+
+    let mut symbols = SymbolTable::new();
+    generate_loop(&builder, "y", y_max, llvm_func, &mut symbols, generate_y_body);
 
     builder.ret_void();
     Module::new(module)
 }
 
-fn generate_x_loop(
-    builder: &Builder,
-    func: &Func,
-    llvm_func: LLVMValueRef,
-    symbols: &mut SymbolTable
-) {
-    let generate_body = |symbols: &mut SymbolTable| {
-        lower_func(
-            builder,
-            func,
-            symbols.get("src"),
-            symbols.get("dst"),
-            symbols.get("src_width"),
-            symbols.get("x"),
-            symbols.get("y"));
-    };
-    generate_loop(builder, "x", "x_max", llvm_func, symbols, generate_body);
-}
-
 fn generate_loop<'s>(
     builder: &Builder,
     name: &str,
-    bound_name: &str, // name of the symbol containing the upper bound for
-                      // the loop variable (e.g. y_max for a y loop)
+    bound: LLVMValueRef, // (open) upper bound on loop variable's value
     llvm_func: LLVMValueRef,
     symbols: &'s mut SymbolTable,
     mut generate_body: impl FnMut(&'s mut SymbolTable)
@@ -244,9 +230,6 @@ fn generate_loop<'s>(
     // calling this function to the loop header
     builder.position_at_end(pre_header);
     builder.br(header);
-
-    // Open upper-bound on loop variable
-    let bound = symbols.get(bound_name);
 
     // header:
     builder.position_at_end(header);
