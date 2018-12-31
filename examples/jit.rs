@@ -7,9 +7,10 @@ use prism::codegen::*;
 
 fn run_process_image(context: &Context) {
     println!("Defining function");
+    let buffer_names = vec!["src", "dst"];
     let func = Func::new(
-        "out",
-        read("in", x(), y()) + 3
+        "dst",
+        read("src", x(), y()) + 3
     );
     // The generated IR looks sensible, but compilation fails with:
     //      "Unable to copy EFLAGS physical register!"
@@ -19,7 +20,7 @@ fn run_process_image(context: &Context) {
     // EDIT: the optimisation step below fixes the compilation failure, which makes me
     // EDIT: more suspicious that this is an LLVM bug
     println!("Creating module");
-    let mut module = create_process_image_module(context, &func);
+    let mut module = create_process_image_module(context, &func, &buffer_names);
 
     println!("Pre-optimise IR");
     module.dump_to_stdout();

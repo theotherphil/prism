@@ -145,33 +145,33 @@ impl SymbolTable {
     }
 }
 
-pub fn create_process_image_module(context: &Context, func: &Func) -> Module {
+pub fn create_process_image_module(
+    context: &Context,
+    func: &Func,
+    buffer_names: &[&str]
+) -> Module {
+    assert!(buffer_names.len() > 0);
     let module = context.new_module("process_image");
     let builder = Builder::new(context);
 
-    let llvm_func_type = builder.func_type(
-        builder.type_void(),
-        &mut [
-            builder.type_i8_ptr(),
-            builder.type_i64(),
-            builder.type_i64(),
-            builder.type_i8_ptr(),
-            builder.type_i64(),
-            builder.type_i64()
-        ]
-    );
+    let mut func_params = vec![];
+    for _ in buffer_names {
+        func_params.push(builder.type_i8_ptr());
+        func_params.push(builder.type_i64());
+        func_params.push(builder.type_i64());
+    }
+    let llvm_func_type = builder.func_type(builder.type_void(), &mut func_params);
     let llvm_func = builder.add_func(module, "process_image", llvm_func_type);
     let params = builder.get_params(llvm_func);
-    // We currently just assume that src and dst have the same dimensions
-    // so ignore the last two params
-    let (src, src_width, src_height, dst) = (
-        params[0], params[1], params[2], params[3]
-    );
+
+    // We currently assume that all input buffers will have the same dimensions
+    let width = params[1];
+    let height = params[2];
 
     let entry = builder.new_block(llvm_func, "entry");
     builder.position_at_end(entry);
-    let y_max = builder.trunc(src_height, builder.type_i32());
-    let x_max = builder.trunc(src_width, builder.type_i32());
+    let y_max = builder.trunc(height, builder.type_i32());
+    let x_max = builder.trunc(width, builder.type_i32());
 
     let generate_x_body = |symbols| {
         lower_func(&builder, func, x_max, symbols);
@@ -181,8 +181,9 @@ pub fn create_process_image_module(context: &Context, func: &Func) -> Module {
     };
 
     let mut symbols = SymbolTable::new();
-    symbols.add("in", src);
-    symbols.add("out", dst);
+    for (i, b) in buffer_names.iter().enumerate() {
+        symbols.add(b, params[3 * i]);
+    }
     generate_loop(&builder, "y", y_max, llvm_func, &mut symbols, generate_y_body);
 
     builder.ret_void();
