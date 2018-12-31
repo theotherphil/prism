@@ -6,10 +6,13 @@ use std::mem;
 use prism::*;
 use prism::codegen::*;
 
+/// Variables can't be reassigned in LLVM IR, so this version allocates the
+/// loop variables in a stack-allocated array and updates them via loads and
+/// stores. PROCESS_IMAGE_IR_PHI uses phi nodes instead, which appears to be
+/// the more common approach.
 const PROCESS_IMAGE_IR: &str = "define void @process_image(
     i8* nocapture readonly %src, i64 %src_width, i64 %src_height,
     i8* nocapture %dst, i64 %dst_width, i64 %dst_height) {
-; TODO: try using phi nodes instead of alloca for loop variables
 ; TODO: this code assumes that src and dst have the same dimensions. add validation
 entry:
   %y = alloca i32, align 4
@@ -57,9 +60,46 @@ y.for.end:
   ret void
 }";
 
-fn run_process_image(context: &Context) {
+const PROCESS_IMAGE_IR_PHI: &str = "define void @process_image(
+    i8* nocapture readonly %src, i64 %src_width, i64 %src_height,
+    i8* nocapture %dst, i64 %dst_width, i64 %dst_height) {
+; TODO: this code assumes that src and dst have the same dimensions. add validation
+entry:
+  %ymax = trunc i64 %src_height to i32
+  %xmax = trunc i64 %src_width to i32
+  br label %y.header
+y.header:
+  %norows = icmp eq i32 %ymax, 0
+  br i1 %norows, label %y.after, label %y.loop
+y.loop:
+  %y = phi i32 [0, %y.header], [%ynext, %x.after]
+  br label %x.header
+x.header:
+  %nocols = icmp eq i32 %xmax, 0
+  br i1 %nocols, label %x.after, label %x.loop
+x.loop:
+  %x = phi i32 [0, %x.header], [%xnext, %x.loop]
+  %rowoff = mul i32 %y, %xmax
+  %off = add i32 %rowoff, %x
+  %srcptr = getelementptr i8, i8* %src, i32 %off
+  %dstptr = getelementptr i8, i8* %dst, i32 %off
+  %val = load i8, i8* %srcptr
+  %upd = add i8 %val, 3
+  store i8 %upd, i8* %dstptr
+  %xnext = add i32 %x, 1
+  %xcontinue = icmp slt i32 %xnext, %xmax
+  br i1 %xcontinue, label %x.loop, label %x.after
+x.after:
+  %ynext = add i32 %y, 1
+  %ycontinue = icmp slt i32 %ynext, %ymax
+  br i1 %ycontinue, label %y.loop, label %y.after
+y.after:
+  ret void
+}";
+
+fn run_process_image(context: &Context, ir: &str) {
     println!("* Creating module");
-    let mut module = create_module_from_handwritten_ir(context, PROCESS_IMAGE_IR);
+    let mut module = create_module_from_handwritten_ir(context, ir);
 
     println!("* Raw IR");
     module.dump_to_stdout();
@@ -84,6 +124,8 @@ fn run_process_image(context: &Context) {
 
 fn main() {
     initialise_llvm_jit();
-    run_process_image(&Context::new());
+    const USE_PHI_VERSION: bool = true;
+    let ir = if USE_PHI_VERSION { PROCESS_IMAGE_IR_PHI } else { PROCESS_IMAGE_IR };
+    run_process_image(&Context::new(), ir);
 }
 
