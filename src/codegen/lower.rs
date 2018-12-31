@@ -103,7 +103,6 @@ pub fn lower_definition(
 
 pub fn lower_func(
     builder: &Builder,
-    // e.g. out(x, y) = in(x, y) + in(x, y - 1)
     func: &Func,
     // i32, width of input image
     width: LLVMValueRef,
@@ -147,20 +146,20 @@ impl SymbolTable {
 
 pub fn create_process_image_module(
     context: &Context,
-    func: &Func,
+    funcs: &[&Func],
     buffer_names: &[&str]
 ) -> Module {
     assert!(buffer_names.len() > 0);
     let module = context.new_module("process_image");
     let builder = Builder::new(context);
 
-    let mut func_params = vec![];
+    let mut llvm_func_params = vec![];
     for _ in buffer_names {
-        func_params.push(builder.type_i8_ptr());
-        func_params.push(builder.type_i64());
-        func_params.push(builder.type_i64());
+        llvm_func_params.push(builder.type_i8_ptr());
+        llvm_func_params.push(builder.type_i64());
+        llvm_func_params.push(builder.type_i64());
     }
-    let llvm_func_type = builder.func_type(builder.type_void(), &mut func_params);
+    let llvm_func_type = builder.func_type(builder.type_void(), &mut llvm_func_params);
     let llvm_func = builder.add_func(module, "process_image", llvm_func_type);
     let params = builder.get_params(llvm_func);
 
@@ -173,8 +172,11 @@ pub fn create_process_image_module(
     let y_max = builder.trunc(height, builder.type_i32());
     let x_max = builder.trunc(width, builder.type_i32());
 
-    let generate_x_body = |symbols| {
-        lower_func(&builder, func, x_max, symbols);
+    let generate_x_body = |symbols: &mut SymbolTable| {
+        // TODO: don't assume the provided funcs are already in dependency order
+        for func in funcs {
+            lower_func(&builder, func, x_max, &mut *symbols);
+        }
     };
     let generate_y_body = |symbols| {
         generate_loop(&builder, "x", x_max, llvm_func, symbols, generate_x_body);
