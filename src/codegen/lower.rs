@@ -133,7 +133,7 @@ pub fn lower_func(
     builder.store(val, ptr, 1);
 }
 
-pub fn create_process_image_module(context: &Context, func: &Func) -> LLVMModuleRef {
+pub fn create_process_image_module(context: &Context, func: &Func) -> Module {
     let module = context.new_module("process_image");
     let builder = Builder::new(context);
 
@@ -208,5 +208,5 @@ pub fn create_process_image_module(context: &Context, func: &Func) -> LLVMModule
     builder.position_at_end(bb_yend);
     builder.ret_void();
 
-    module
+    Module::new(module)
 }

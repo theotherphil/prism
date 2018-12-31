@@ -194,10 +194,10 @@ pub struct Func {
 }
 
 impl Func {
-    pub fn new(name: &str, definition: &Definition) -> Func {
+    pub fn new(name: &str, definition: Definition) -> Func {
         Func {
             name: name.to_string(),
-            definition: definition.clone()
+            definition: definition
         }
     }
 }
@@ -231,8 +231,10 @@ mod tests {
     #[test]
     fn test_func_pretty_print() {
         // f(x, y) = g(x + 1, y - 1) + g(x - 1, y) + 2
-        let d = read("g", x() + 1, y() - 1) + read("g", x() - 1, y()) + 2;
-        let f = Func::new("f", &d);
+        let f = Func::new(
+            "f",
+            read("g", x() + 1, y() - 1) + read("g", x() - 1, y()) + 2
+        );
         assert_eq!(f.pretty_print(), "f(x, y) = (g(x + 1, y - 1) + g(x - 1, y)) + 2");
     }
 }

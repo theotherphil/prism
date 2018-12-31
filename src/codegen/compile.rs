@@ -49,14 +49,7 @@ pub fn initialise_llvm_jit() {
     }
 }
 
-pub struct ExecutionEngine {
-    // Need lifetimes to make this safe - need to tie
-    // lifetime of execution engine (and everything else)
-    // to the lifetime of the LLVM context we're using
-    engine: LLVMExecutionEngineRef
-}
-
-pub fn optimise(module: LLVMModuleRef) {
+pub fn optimise(module: &mut Module) {
     unsafe {
         let pass_manager_builder = LLVMPassManagerBuilderCreate();
         LLVMPassManagerBuilderSetOptLevel(pass_manager_builder, 3 as ::libc::c_uint);
@@ -65,16 +58,23 @@ pub fn optimise(module: LLVMModuleRef) {
         let pass_manager = LLVMCreatePassManager();
         LLVMPassManagerBuilderPopulateModulePassManager(pass_manager_builder, pass_manager);
         LLVMPassManagerBuilderDispose(pass_manager_builder);
-        LLVMRunPassManager(pass_manager, module);
+        LLVMRunPassManager(pass_manager, module.module);
     }
 }
 
+pub struct ExecutionEngine {
+    // Need lifetimes to make this safe - need to tie
+    // lifetime of execution engine (and everything else)
+    // to the lifetime of the LLVM context we're using
+    engine: LLVMExecutionEngineRef
+}
+
 impl ExecutionEngine {
-    pub fn new(module: LLVMModuleRef) -> ExecutionEngine {
+    pub fn new(module: Module) -> ExecutionEngine {
         unsafe {
             let mut engine = mem::uninitialized();
             let mut out = mem::zeroed();
-            LLVMCreateExecutionEngineForModule(&mut engine, module, &mut out);
+            LLVMCreateExecutionEngineForModule(&mut engine, module.module, &mut out);
             ExecutionEngine { engine }
         }
     }
@@ -95,7 +95,23 @@ impl Drop for ExecutionEngine {
     }
 }
 
-pub fn create_module_from_handwritten_ir(context: &Context, ir: &str) -> LLVMModuleRef {
+pub struct Module {
+    pub module: LLVMModuleRef
+}
+
+impl Module {
+    pub fn new(module: LLVMModuleRef) -> Module {
+        Module { module }
+    }
+
+    pub fn dump_to_stdout(&self) {
+        unsafe {
+            LLVMDumpModule(self.module);
+        }
+    }
+}
+
+pub fn create_module_from_handwritten_ir(context: &Context, ir: &str) -> Module {
     unsafe {
         let ir = CString::new(ir).unwrap();
 
@@ -111,6 +127,6 @@ pub fn create_module_from_handwritten_ir(context: &Context, ir: &str) -> LLVMMod
             panic!("IR parsing failed: {:?}", message_str);
         }
 
-        module
+        Module::new(module)
     }
 }

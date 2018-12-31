@@ -5,7 +5,6 @@ extern crate llvm_sys as llvm;
 
 use std::mem;
 use llvm::prelude::*;
-use llvm::core::*;
 use prism::codegen::*;
 
 const SUM_IR: &str = "define i64 @sum(i64, i64, i64) {
@@ -34,10 +33,10 @@ fn run_sum(context: &Context, codegen: Codegen) {
     println!("*** Running {:?}\n", codegen);
     let module = match codegen {
         Codegen::Handwritten => create_module_from_handwritten_ir(context, SUM_IR),
-        Codegen::Builder => create_sum_module_via_builder(context),
+        Codegen::Builder => Module::new(create_sum_module_via_builder(context)),
     };
     println!("** Module IR:");
-    unsafe { LLVMDumpModule(module); }
+    module.dump_to_stdout();
 
     let engine = ExecutionEngine::new(module);
 
