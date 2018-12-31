@@ -1,6 +1,5 @@
 //! Functions for lowering the prism AST to LLVM IR
 
-use llvm::*;
 use llvm::prelude::*;
 use crate::codegen::builder::*;
 use crate::codegen::compile::*;
@@ -171,7 +170,7 @@ pub fn create_process_image_module(context: &Context, func: &Func) -> Module {
     builder.br(y_header);
     // y.header:
     builder.position_at_end(y_header);
-    let no_rows = builder.icmp(LLVMIntPredicate::LLVMIntEQ, y_max, builder.const_i32(0));
+    let no_rows = builder.icmp_eq(y_max, builder.const_i32(0));
     builder.cond_br(no_rows, y_after, y_loop);
     // y.loop:
     builder.position_at_end(y_loop);
@@ -180,7 +179,7 @@ pub fn create_process_image_module(context: &Context, func: &Func) -> Module {
     builder.br(x_header);
     // x.header:
     builder.position_at_end(x_header);
-    let no_cols = builder.icmp(LLVMIntPredicate::LLVMIntEQ, x_max, builder.const_i32(0));
+    let no_cols = builder.icmp_eq(x_max, builder.const_i32(0));
     builder.cond_br(no_cols, x_after, x_loop);
     // x.loop:
     builder.position_at_end(x_loop);
@@ -189,13 +188,13 @@ pub fn create_process_image_module(context: &Context, func: &Func) -> Module {
     lower_func(&builder, func, src, dst, src_width, x, y);
     let x_next = builder.add(x, builder.const_i32(1));
     builder.add_phi_incoming(x, x_next, builder.get_insert_block());
-    let x_continue = builder.icmp(LLVMIntPredicate::LLVMIntSLT, x_next, x_max);
+    let x_continue = builder.icmp_slt(x_next, x_max);
     builder.cond_br(x_continue, x_loop, x_after);
     // x.after:
     builder.position_at_end(x_after);
     let y_next = builder.add(y, builder.const_i32(1));
     builder.add_phi_incoming(y, y_next, builder.get_insert_block());
-    let y_continue = builder.icmp(LLVMIntPredicate::LLVMIntSLT, y_next, y_max);
+    let y_continue = builder.icmp_slt(y_next, y_max);
     builder.cond_br(y_continue, y_loop, y_after);
     // y.after:
     builder.position_at_end(y_after);

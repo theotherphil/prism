@@ -54,6 +54,16 @@ macro_rules! impl_llvm_binary_op {
     }
 }
 
+macro_rules! impl_icmp {
+    ($name:ident, $op:ident) => {
+        pub fn $name(&self, lhs: LLVMValueRef, rhs: LLVMValueRef) -> LLVMValueRef {
+            unsafe {
+                LLVMBuildICmp(self.builder, LLVMIntPredicate::$op, lhs, rhs, noname())
+            }
+        }
+    };
+}
+
 impl Builder {
     pub fn new(context: &Context) -> Builder {
         unsafe {
@@ -221,11 +231,16 @@ impl Builder {
         }
     }
 
-    pub fn icmp(&self, op: LLVMIntPredicate, lhs: LLVMValueRef, rhs: LLVMValueRef) -> LLVMValueRef {
-        unsafe {
-            LLVMBuildICmp(self.builder, op, lhs, rhs, noname())
-        }
-    }
+    impl_icmp!(icmp_eq, LLVMIntEQ);
+    impl_icmp!(icmp_ne, LLVMIntNE);
+    impl_icmp!(icmp_ugt, LLVMIntUGT);
+    impl_icmp!(icmp_uge, LLVMIntUGE);
+    impl_icmp!(icmp_ult, LLVMIntULT);
+    impl_icmp!(icmp_ule, LLVMIntULE);
+    impl_icmp!(icmp_sgt, LLVMIntSGT);
+    impl_icmp!(icmp_sge, LLVMIntSGE);
+    impl_icmp!(icmp_slt, LLVMIntSLT);
+    impl_icmp!(icmp_sle, LLVMIntSLE);
 
     pub fn in_bounds_gep(&self, ptr: LLVMValueRef, offset: LLVMValueRef) -> LLVMValueRef {
         unsafe {
