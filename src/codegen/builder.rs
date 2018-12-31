@@ -116,6 +116,30 @@ impl Builder {
         unsafe { LLVMPositionBuilderAtEnd(self.builder, block); }
     }
 
+    pub fn get_insert_block(&self) -> LLVMBasicBlockRef {
+        unsafe { LLVMGetInsertBlock(self.builder) }
+    }
+
+    pub fn build_phi(&self, ty: LLVMTypeRef, name: &str) -> LLVMValueRef {
+        unsafe {
+            let name = CString::new(name).unwrap();
+            LLVMBuildPhi(self.builder, ty, name.as_ptr())
+        }
+    }
+
+    pub fn add_phi_incoming(
+        &self,
+        phi: LLVMValueRef,
+        incoming_value: LLVMValueRef,
+        incoming_block: LLVMBasicBlockRef
+    ) {
+        unsafe {
+            let mut values = [incoming_value];
+            let mut blocks = [incoming_block];
+            LLVMAddIncoming(phi, values.as_mut_ptr(), blocks.as_mut_ptr(), 1);
+        }
+    }
+
     pub fn get_params(&self, func: LLVMValueRef) -> Vec<LLVMValueRef> {
         unsafe {
             let num = LLVMCountParams(func);

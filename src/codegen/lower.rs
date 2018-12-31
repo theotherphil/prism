@@ -156,56 +156,49 @@ pub fn create_process_image_module(context: &Context, func: &Func) -> Module {
         params[0], params[1], params[2], params[3]
     );
 
-    let bb_entry = builder.new_block(function, "entry");
-    let bb_ycond = builder.new_block(function, "y.for.cond");
-    let bb_ybody = builder.new_block(function, "y.for.body");
-    let bb_yinc = builder.new_block(function, "y.for.inc");
-    let bb_yend = builder.new_block(function, "y.for.end");
-    let bb_xcond = builder.new_block(function, "x.for.cond");
-    let bb_xbody = builder.new_block(function, "x.for.body");
-    let bb_xinc = builder.new_block(function, "x.for.inc");
-    let bb_xend = builder.new_block(function, "x.for.end");
+    let entry = builder.new_block(function, "entry");
+    let y_header = builder.new_block(function, "y.header");
+    let y_loop = builder.new_block(function, "y.loop");
+    let y_after = builder.new_block(function, "y.after");
+    let x_header = builder.new_block(function, "x.header");
+    let x_loop = builder.new_block(function, "x.loop");
+    let x_after = builder.new_block(function, "x.after");
 
     // entry:
-    builder.position_at_end(bb_entry);
-    let y = builder.alloca(builder.type_i32(), "y", 4);
-    let x = builder.alloca(builder.type_i32(), "x", 4);
-    let ymax = builder.trunc(src_height, builder.type_i32());
-    let xmax = builder.trunc(src_width, builder.type_i32());
-    builder.store(builder.const_i32(0), y, 4);
-    builder.store(builder.const_i32(0), x, 4);
-    builder.br(bb_ycond);
-    // y.for.cond:
-    builder.position_at_end(bb_ycond);
-    let ycmp = builder.icmp(LLVMIntPredicate::LLVMIntSLT, builder.load(y, 4), ymax);
-    builder.cond_br(ycmp, bb_ybody, bb_yend);
-    // y.for.body:
-    builder.position_at_end(bb_ybody);
-    builder.store(builder.const_i32(0), x, 4);
-    builder.br(bb_xcond);
-    // x.for.cond:
-    builder.position_at_end(bb_xcond);
-    let xcmp = builder.icmp(LLVMIntPredicate::LLVMIntSLT, builder.load(x, 4), xmax);
-    builder.cond_br(xcmp, bb_xbody, bb_xend);
-    // x.for.body:
-    builder.position_at_end(bb_xbody);
-    lower_func(&builder, func, src, dst, src_width, builder.load(x, 4), builder.load(y, 4));
-    builder.br(bb_xinc);
-    // x.for.inc:
-    builder.position_at_end(bb_xinc);
-    let inc_x = builder.add_nsw(builder.load(x, 4), builder.const_i32(1));
-    builder.store(inc_x, x, 4);
-    builder.br(bb_xcond);
-    // y.for.inc:
-    builder.position_at_end(bb_yinc);
-    let inc_y = builder.add_nsw(builder.load(y, 4), builder.const_i32(1));
-    builder.store(inc_y, y, 4);
-    builder.br(bb_ycond);
-    // x.for.end:
-    builder.position_at_end(bb_xend);
-    builder.br(bb_yinc);
-    // y.for.end
-    builder.position_at_end(bb_yend);
+    builder.position_at_end(entry);
+    let y_max = builder.trunc(src_height, builder.type_i32());
+    let x_max = builder.trunc(src_width, builder.type_i32());
+    builder.br(y_header);
+    // y.header:
+    builder.position_at_end(y_header);
+    let no_rows = builder.icmp(LLVMIntPredicate::LLVMIntEQ, y_max, builder.const_i32(0));
+    builder.cond_br(no_rows, y_after, y_loop);
+    // y.loop:
+    builder.position_at_end(y_loop);
+    let y = builder.build_phi(builder.type_i32(), "y");
+    builder.add_phi_incoming(y, builder.const_i32(0), y_header);
+    builder.br(x_header);
+    // x.header:
+    builder.position_at_end(x_header);
+    let no_cols = builder.icmp(LLVMIntPredicate::LLVMIntEQ, x_max, builder.const_i32(0));
+    builder.cond_br(no_cols, x_after, x_loop);
+    // x.loop:
+    builder.position_at_end(x_loop);
+    let x = builder.build_phi(builder.type_i32(), "x");
+    builder.add_phi_incoming(x, builder.const_i32(0), x_header);
+    lower_func(&builder, func, src, dst, src_width, x, y);
+    let x_next = builder.add(x, builder.const_i32(1));
+    builder.add_phi_incoming(x, x_next, builder.get_insert_block());
+    let x_continue = builder.icmp(LLVMIntPredicate::LLVMIntSLT, x_next, x_max);
+    builder.cond_br(x_continue, x_loop, x_after);
+    // x.after:
+    builder.position_at_end(x_after);
+    let y_next = builder.add(y, builder.const_i32(1));
+    builder.add_phi_incoming(y, y_next, builder.get_insert_block());
+    let y_continue = builder.icmp(LLVMIntPredicate::LLVMIntSLT, y_next, y_max);
+    builder.cond_br(y_continue, y_loop, y_after);
+    // y.after:
+    builder.position_at_end(y_after);
     builder.ret_void();
 
     Module::new(module)
