@@ -134,6 +134,19 @@ pub enum Definition {
     Div(Box<Definition>, Box<Definition>)
 }
 
+impl Definition {
+    fn sources(&self) -> Vec<String> {
+        match self {
+            Definition::Access(a) => vec![a.source.clone()],
+            Definition::Const(_) => vec![],
+            Definition::Add(l, r) => l.sources().into_iter().chain(r.sources()).collect(),
+            Definition::Mul(l, r) => l.sources().into_iter().chain(r.sources()).collect(),
+            Definition::Sub(l, r) => l.sources().into_iter().chain(r.sources()).collect(),
+            Definition::Div(l, r) => l.sources().into_iter().chain(r.sources()).collect(),
+        }
+    }
+}
+
 macro_rules! impl_definition_bin_op {
     ($trait_name:ident, $trait_op:ident, $ctor:expr) => {
         impl $trait_name<Self> for Definition {
@@ -199,6 +212,12 @@ impl Func {
             name: name.to_string(),
             definition: definition
         }
+    }
+
+    /// Returns the name of all the sources mentioned
+    /// in this func's definition
+    pub fn sources(&self) -> Vec<String> {
+        self.definition.sources()
     }
 }
 

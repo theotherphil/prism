@@ -18,6 +18,7 @@ pub mod blur3;
 pub mod codegen;
 pub mod ast;
 pub mod pretty_print;
+pub mod processor;
 
 pub use crate::buffer::*;
 pub use crate::io::*;
@@ -27,4 +28,5 @@ pub use crate::replay::*;
 pub use crate::blur3::*;
 pub use crate::ast::*;
 pub use crate::pretty_print::*;
+pub use crate::processor::*;
 

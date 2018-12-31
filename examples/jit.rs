@@ -1,7 +1,6 @@
 
 extern crate llvm_sys as llvm;
 
-use std::mem;
 use prism::*;
 use prism::codegen::*;
 
@@ -26,7 +25,8 @@ fn run_process_image(context: &Context) {
     // EDIT: the optimisation step below fixes the compilation failure, which makes me
     // EDIT: more suspicious that this is an LLVM bug
     println!("Creating module");
-    let mut module = create_process_image_module(context, &vec![&f, &g], &buffer_names);
+    let funcs = [&f, &g];
+    let mut module = create_process_image_module(context, &funcs, &buffer_names);
 
     println!("Pre-optimise IR");
     module.dump_to_stdout();
@@ -38,25 +38,22 @@ fn run_process_image(context: &Context) {
     let engine = ExecutionEngine::new(module);
 
     println!("Creating function");
-    let process: extern "C" fn(*const u8, usize, usize, *mut u8, usize, usize, *mut u8, usize, usize)
-        = unsafe { mem::transmute(engine.get_func_addr("process_image")) };
+    let processor = engine.get_processor("process_image", &funcs);
 
     println!("Running function");
     let in_image = gray_image!(1, 2, 3; 4, 5, 6; 7, 8, 9);
-    let mut f_image = GrayImage::new(3, 3);
-    let mut g_image = GrayImage::new(3, 3);
-    process(
-        in_image.buffer.as_ptr(), 3, 3,
-        f_image.buffer.as_mut_ptr(), 3, 3,
-        g_image.buffer.as_mut_ptr(), 3, 3
+
+    let results = processor.process(
+        &[(String::from("in"), &in_image)],
+        &funcs
     );
 
     println!("{}", f.pretty_print());
     println!("{}", g.pretty_print());
     println!();
     println!("in: {:?}", in_image);
-    println!("f: {:?}", f_image);
-    println!("g: {:?}", g_image);
+    println!("f: {:?}", results["f"]);
+    println!("g: {:?}", results["g"]);
 }
 
 fn main() {

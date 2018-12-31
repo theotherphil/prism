@@ -8,6 +8,8 @@ use llvm::target::*;
 use llvm::ir_reader::*;
 use llvm::transforms::pass_manager_builder::*;
 use std::ffi::CString;
+use crate::processor::*;
+use crate::ast::*;
 
 pub struct Context {
     // TODO: lifetimes
@@ -84,6 +86,12 @@ impl ExecutionEngine {
             let name = CString::new(name).unwrap();
             LLVMGetFunctionAddress(self.engine, name.as_ptr())
         }
+    }
+
+    /// Grimness
+    pub fn get_processor(&self, name: &str, funcs: &[&Func]) -> Processor {
+        let addr = self.get_func_addr(name);
+        Processor::new(funcs, addr)
     }
 }
 
