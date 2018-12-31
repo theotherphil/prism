@@ -177,8 +177,7 @@ pub fn create_process_image_module(context: &Context, func: &Func) -> LLVMModule
     builder.br(bb_ycond);
     // y.for.cond:
     builder.position_at_end(bb_ycond);
-    let tmp_y_cond = builder.load(y, 4);
-    let ycmp = builder.icmp(LLVMIntPredicate::LLVMIntSLT, tmp_y_cond, ymax);
+    let ycmp = builder.icmp(LLVMIntPredicate::LLVMIntSLT, builder.load(y, 4), ymax);
     builder.cond_br(ycmp, bb_ybody, bb_yend);
     // y.for.body:
     builder.position_at_end(bb_ybody);
@@ -186,8 +185,7 @@ pub fn create_process_image_module(context: &Context, func: &Func) -> LLVMModule
     builder.br(bb_xcond);
     // x.for.cond:
     builder.position_at_end(bb_xcond);
-    let tmp_x_cond = builder.load(x, 4);
-    let xcmp = builder.icmp(LLVMIntPredicate::LLVMIntSLT, tmp_x_cond, xmax);
+    let xcmp = builder.icmp(LLVMIntPredicate::LLVMIntSLT, builder.load(x, 4), xmax);
     builder.cond_br(xcmp, bb_xbody, bb_xend);
     // x.for.body:
     builder.position_at_end(bb_xbody);
@@ -195,14 +193,12 @@ pub fn create_process_image_module(context: &Context, func: &Func) -> LLVMModule
     builder.br(bb_xinc);
     // x.for.inc:
     builder.position_at_end(bb_xinc);
-    let tmp2_x = builder.load(x, 4);
-    let inc_x = builder.add_nsw(tmp2_x, builder.const_i32(1));
+    let inc_x = builder.add_nsw(builder.load(x, 4), builder.const_i32(1));
     builder.store(inc_x, x, 4);
     builder.br(bb_xcond);
     // y.for.inc:
     builder.position_at_end(bb_yinc);
-    let tmp2_y = builder.load(y, 4);
-    let inc_y = builder.add_nsw(tmp2_y, builder.const_i32(1));
+    let inc_y = builder.add_nsw(builder.load(y, 4), builder.const_i32(1));
     builder.store(inc_y, y, 4);
     builder.br(bb_ycond);
     // x.for.end:
