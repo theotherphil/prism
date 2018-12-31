@@ -80,15 +80,40 @@ impl Builder {
     impl_llvm_type_getter!(type_i32, LLVMInt32TypeInContext);
     impl_llvm_type_getter!(type_i64, LLVMInt64TypeInContext);
 
-    pub fn type_i8_ptr(&self) -> LLVMTypeRef {
-        unsafe { LLVMPointerType(self.type_i8(), 0) }
-    }
-
     impl_llvm_binary_op!(add, LLVMBuildAdd);
     impl_llvm_binary_op!(add_nsw, LLVMBuildNSWAdd);
     impl_llvm_binary_op!(mul, LLVMBuildMul);
     impl_llvm_binary_op!(sub, LLVMBuildSub);
     impl_llvm_binary_op!(sdiv, LLVMBuildSDiv);
+
+    impl_icmp!(icmp_eq, LLVMIntEQ);
+    impl_icmp!(icmp_ne, LLVMIntNE);
+    impl_icmp!(icmp_ugt, LLVMIntUGT);
+    impl_icmp!(icmp_uge, LLVMIntUGE);
+    impl_icmp!(icmp_ult, LLVMIntULT);
+    impl_icmp!(icmp_ule, LLVMIntULE);
+    impl_icmp!(icmp_sgt, LLVMIntSGT);
+    impl_icmp!(icmp_sge, LLVMIntSGE);
+    impl_icmp!(icmp_slt, LLVMIntSLT);
+    impl_icmp!(icmp_sle, LLVMIntSLE);
+
+    pub fn const_i32(&self, value: i32) -> LLVMValueRef {
+        unsafe {
+            const SIGN_EXTEND: LLVMBool = 0;
+            LLVMConstInt(self.type_i32(), value as ::libc::c_ulonglong, SIGN_EXTEND)
+        }
+    }
+
+    pub fn const_i8(&self, value: i8) -> LLVMValueRef {
+        unsafe {
+            const SIGN_EXTEND: LLVMBool = 0;
+            LLVMConstInt(self.type_i8(), value as ::libc::c_ulonglong, SIGN_EXTEND)
+        }
+    }
+
+    pub fn type_i8_ptr(&self) -> LLVMTypeRef {
+        unsafe { LLVMPointerType(self.type_i8(), 0) }
+    }
 
     pub fn func_type(&self, ret: LLVMTypeRef, args: &mut [LLVMTypeRef]) -> LLVMTypeRef {
         unsafe {
@@ -185,20 +210,6 @@ impl Builder {
         }
     }
 
-    pub fn const_i32(&self, value: i32) -> LLVMValueRef {
-        unsafe {
-            const SIGN_EXTEND: LLVMBool = 0;
-            LLVMConstInt(self.type_i32(), value as ::libc::c_ulonglong, SIGN_EXTEND)
-        }
-    }
-
-    pub fn const_i8(&self, value: i8) -> LLVMValueRef {
-        unsafe {
-            const SIGN_EXTEND: LLVMBool = 0;
-            LLVMConstInt(self.type_i8(), value as ::libc::c_ulonglong, SIGN_EXTEND)
-        }
-    }
-
     pub fn alloca(&self, ty: LLVMTypeRef, name: &str, align: u32) -> LLVMValueRef {
         unsafe {
             let name = CString::new(name).unwrap();
@@ -230,17 +241,6 @@ impl Builder {
             LLVMBuildTrunc(self.builder, value, ty, noname())
         }
     }
-
-    impl_icmp!(icmp_eq, LLVMIntEQ);
-    impl_icmp!(icmp_ne, LLVMIntNE);
-    impl_icmp!(icmp_ugt, LLVMIntUGT);
-    impl_icmp!(icmp_uge, LLVMIntUGE);
-    impl_icmp!(icmp_ult, LLVMIntULT);
-    impl_icmp!(icmp_ule, LLVMIntULE);
-    impl_icmp!(icmp_sgt, LLVMIntSGT);
-    impl_icmp!(icmp_sge, LLVMIntSGE);
-    impl_icmp!(icmp_slt, LLVMIntSLT);
-    impl_icmp!(icmp_sle, LLVMIntSLE);
 
     pub fn in_bounds_gep(&self, ptr: LLVMValueRef, offset: LLVMValueRef) -> LLVMValueRef {
         unsafe {
