@@ -108,6 +108,13 @@ fn run_process_image_example(context: &Context, codegen: Codegen) {
             Codegen::Builder => create_process_image_module(context, &func)
         };
         // Dump the module as IR to stdout.
+        println!("Pre-optimise:");
+        LLVMDumpModule(module);
+        log_action!(
+            "Optimise",
+            || optimise(module)
+        );
+        println!("Post-optimise:");
         LLVMDumpModule(module);
         let engine = log_action!(
             "Execution engine creation",

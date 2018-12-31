@@ -6,6 +6,7 @@ use llvm::core::*;
 use llvm::execution_engine::*;
 use llvm::target::*;
 use llvm::ir_reader::*;
+use llvm::transforms::pass_manager_builder::*;
 use std::ffi::CString;
 
 pub struct Context {
@@ -53,6 +54,19 @@ pub struct ExecutionEngine {
     // lifetime of execution engine (and everything else)
     // to the lifetime of the LLVM context we're using
     engine: LLVMExecutionEngineRef
+}
+
+pub fn optimise(module: LLVMModuleRef) {
+    unsafe {
+        let pass_manager_builder = LLVMPassManagerBuilderCreate();
+        LLVMPassManagerBuilderSetOptLevel(pass_manager_builder, 3 as ::libc::c_uint);
+        LLVMPassManagerBuilderSetSizeLevel(pass_manager_builder, 0 as ::libc::c_uint);
+
+        let pass_manager = LLVMCreatePassManager();
+        LLVMPassManagerBuilderPopulateModulePassManager(pass_manager_builder, pass_manager);
+        LLVMPassManagerBuilderDispose(pass_manager_builder);
+        LLVMRunPassManager(pass_manager, module);
+    }
 }
 
 impl ExecutionEngine {
