@@ -8,6 +8,13 @@ fn run_process_image(context: &Context) {
     println!("Defining function");
     // These are the names of the buffers we'll pass to f after
     // it's generated, in order.
+
+    // TODO: want to be able to represent the entire function graph as a
+    // TODO: single object, and pre-calculate any required info on inputs,
+    // TODO: number of calculated images, etc.
+    // TODO: also want to be able to write, e.g.
+    // TODO: f(x, y) = g(x, y) + 1
+
     let buffer_names = vec!["in", "f", "g"];
     let f = Func::new(
         "f",
