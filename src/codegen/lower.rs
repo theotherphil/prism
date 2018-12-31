@@ -200,46 +200,10 @@ pub fn create_process_image_module(context: &Context, func: &Func) -> Module {
     let generate_y_body = |symbols| {
         generate_x_loop(&builder, func, llvm_func, symbols)
     };
-    generate_y_loop(&builder, llvm_func, &mut symbols, generate_y_body);
+    generate_loop(&builder, "y", "y_max", llvm_func, &mut symbols, generate_y_body);
 
     builder.ret_void();
     Module::new(module)
-}
-
-fn generate_y_loop<'s>(
-    builder: &Builder,
-    llvm_func: LLVMValueRef,
-    symbols: &'s mut SymbolTable,
-    mut generate_body: impl FnMut(&'s mut SymbolTable)
-) {
-    let pre_header = builder.get_insert_block();
-
-    let y_header = builder.new_block(llvm_func, "y.header");
-    let y_loop = builder.new_block(llvm_func, "y.loop");
-    let y_after = builder.new_block(llvm_func, "y.after");
-
-    builder.position_at_end(pre_header);
-    builder.br(y_header);
-
-    // load symbols
-    let y_max = symbols.get("y_max");
-
-    // y.header:
-    builder.position_at_end(y_header);
-    let no_rows = builder.icmp_eq(y_max, builder.const_i32(0));
-    builder.cond_br(no_rows, y_after, y_loop);
-    // y.loop:
-    builder.position_at_end(y_loop);
-    let y = builder.build_phi(builder.type_i32(), "y");
-    symbols.add("y", y);
-    builder.add_phi_incoming(y, builder.const_i32(0), y_header);
-    generate_body(symbols);
-    let y_next = builder.add(y, builder.const_i32(1));
-    builder.add_phi_incoming(y, y_next, builder.get_insert_block());
-    let y_continue = builder.icmp_slt(y_next, y_max);
-    builder.cond_br(y_continue, y_loop, y_after);
-    // y.after:
-    builder.position_at_end(y_after);
 }
 
 fn generate_x_loop(
@@ -248,34 +212,58 @@ fn generate_x_loop(
     llvm_func: LLVMValueRef,
     symbols: &mut SymbolTable
 ) {
+    let generate_body = |symbols: &mut SymbolTable| {
+        lower_func(
+            builder,
+            func,
+            symbols.get("src"),
+            symbols.get("dst"),
+            symbols.get("src_width"),
+            symbols.get("x"),
+            symbols.get("y"));
+    };
+    generate_loop(builder, "x", "x_max", llvm_func, symbols, generate_body);
+}
+
+fn generate_loop<'s>(
+    builder: &Builder,
+    name: &str,
+    bound_name: &str, // name of the symbol containing the upper bound for
+                      // the loop variable (e.g. y_max for a y loop)
+    llvm_func: LLVMValueRef,
+    symbols: &'s mut SymbolTable,
+    mut generate_body: impl FnMut(&'s mut SymbolTable)
+) {
     let pre_header = builder.get_insert_block();
 
-    let x_header = builder.new_block(llvm_func, "x.header");
-    let x_loop = builder.new_block(llvm_func, "x.loop");
-    let x_after = builder.new_block(llvm_func, "x.after");
+    let header = builder.new_block(llvm_func, &(String::from(name) + ".header"));
+    let body = builder.new_block(llvm_func, &(String::from(name) + ".loopbody"));
+    let after = builder.new_block(llvm_func, &(String::from(name) + ".after"));
 
+    // Add unconditional branch from the insertion block prior to
+    // calling this function to the loop header
     builder.position_at_end(pre_header);
-    builder.br(x_header);
+    builder.br(header);
 
-    // load symbols
-    let x_max = symbols.get("x_max");
-    let y = symbols.get("y");
-    let src = symbols.get("src");
-    let dst = symbols.get("dst");
-    let src_width = symbols.get("src_width");
+    // Open upper-bound on loop variable
+    let bound = symbols.get(bound_name);
 
-    // x.header:
-    builder.position_at_end(x_header);
-    let no_cols = builder.icmp_eq(x_max, builder.const_i32(0));
-    builder.cond_br(no_cols, x_after, x_loop);
-    // x.loop:
-    builder.position_at_end(x_loop);
-    let x = builder.build_phi(builder.type_i32(), "x");
-    builder.add_phi_incoming(x, builder.const_i32(0), x_header);
-    lower_func(&builder, func, src, dst, src_width, x, y);
-    let x_next = builder.add(x, builder.const_i32(1));
-    builder.add_phi_incoming(x, x_next, builder.get_insert_block());
-    let x_continue = builder.icmp_slt(x_next, x_max);
-    builder.cond_br(x_continue, x_loop, x_after);
-    builder.position_at_end(x_after);
+    // header:
+    builder.position_at_end(header);
+    let is_empty = builder.icmp_eq(bound, builder.const_i32(0));
+    builder.cond_br(is_empty, after, body);
+
+    // body:
+    builder.position_at_end(body);
+    let loop_variable = builder.build_phi(builder.type_i32(), name);
+    symbols.add(name, loop_variable);
+    builder.add_phi_incoming(loop_variable, builder.const_i32(0), header);
+    generate_body(symbols);
+    let next = builder.add(loop_variable, builder.const_i32(1));
+    builder.add_phi_incoming(loop_variable, next, builder.get_insert_block());
+    let cont = builder.icmp_slt(next, bound);
+    builder.cond_br(cont, body, after);
+
+    // after:
+    builder.position_at_end(after);
 }
