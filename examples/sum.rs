@@ -32,27 +32,25 @@ fn create_sum_module_via_builder(context: &Context) -> LLVMModuleRef {
 
 fn run_sum(context: &Context, codegen: Codegen) {
     println!("*** Running {:?}\n", codegen);
-    unsafe {
-        let module = match codegen {
-            Codegen::Handwritten => create_module_from_handwritten_ir(context, SUM_IR),
-            Codegen::Builder => create_sum_module_via_builder(context),
-        };
-        println!("** Module IR:");
-        LLVMDumpModule(module);
+    let module = match codegen {
+        Codegen::Handwritten => create_module_from_handwritten_ir(context, SUM_IR),
+        Codegen::Builder => create_sum_module_via_builder(context),
+    };
+    println!("** Module IR:");
+    unsafe { LLVMDumpModule(module); }
 
-        let engine = ExecutionEngine::new(module);
+    let engine = ExecutionEngine::new(module);
 
-        let addr = engine.get_func_addr("sum");
-        let f: extern "C" fn(u64, u64, u64) -> u64 = mem::transmute(addr);
-        let (x, y, z) = (1, 1, 1);
-        let res = f(x, y, z);
-        println!("{} + {} + {} = {}", x, y, z, res);
-    }
+    let addr = engine.get_func_addr("sum");
+    let f: extern "C" fn(u64, u64, u64) -> u64 = unsafe { mem::transmute(addr) };
+    let (x, y, z) = (1, 1, 1);
+    let res = f(x, y, z);
+    println!("{} + {} + {} = {}", x, y, z, res);
 }
 
 /// Whether to use handwritten IR or an LLVM builder
 #[derive(Copy, Clone, PartialEq, Eq, Debug)]
-enum Codegen { Handwritten, Builde }
+enum Codegen { Handwritten, Builder }
 
 fn main() {
     initialise_llvm_jit();

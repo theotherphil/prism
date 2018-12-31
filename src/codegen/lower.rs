@@ -125,7 +125,6 @@ pub fn lower_func(
     x: LLVMValueRef,
     // i32, current value of y variable
     y: LLVMValueRef
-    // return value has type i8
 ) {
     assert_eq!(func.name, "out");
     let val = lower_definition(builder, &func.definition, input, width, x, y);
