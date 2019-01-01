@@ -21,7 +21,7 @@ Not a lot is implemented yet, but it is possible to JIT and run a basic image pi
 
     // Run the generated code
     let inputs = [(&input, &example_image(20, 10))];
-    let results = processor.process(&graph, &inputs);
+    let results = processor.process(&inputs);
 ```
 
 See [examples/jit.rs](https://github.com/theotherphil/prism/blob/master/examples/jit.rs) for the latest runnable version of this.

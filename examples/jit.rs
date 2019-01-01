@@ -43,7 +43,7 @@ fn run(context: &Context, dir: &Path) -> Result<()> {
 
     // Run the generated code
     let inputs = [(&input, &example_image(20, 10))];
-    let results = processor.process(&graph, &inputs);
+    let results = processor.process(&inputs);
 
     // Dump the inputs, outputs and intermediates
     for func in graph.funcs() {

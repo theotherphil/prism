@@ -10,15 +10,14 @@ use std::mem;
 pub struct Processor {
     // TODO: needs lifetimes - can't use this after the execution engine is dropped
     function: FunctionPointer,
-    num_inputs: usize,
-    num_outputs: usize
+    inputs: Vec<String>,
+    outputs: Vec<String>
 }
 
 impl Processor {
     pub fn new(graph: &Graph, addr: u64) -> Processor {
-        let (num_inputs, num_outputs) = (graph.inputs().len(), graph.outputs().len());
         let function = unsafe {
-            match (num_inputs, num_outputs) {
+            match (graph.inputs().len(), graph.outputs().len()) {
                 (1, 1) => FunctionPointer::OneInOneOut(mem::transmute(addr)),
                 (1, 2) => FunctionPointer::OneInTwoOut(mem::transmute(addr)),
                 (2, 1) => FunctionPointer::TwoInOneOut(mem::transmute(addr)),
@@ -26,18 +25,16 @@ impl Processor {
                 (_, _) => panic!("Unsupported signature")
             }
         };
-        Processor { function, num_inputs, num_outputs }
+        Processor {
+            function,
+            inputs: graph.inputs().to_vec(),
+            outputs: graph.outputs().to_vec()
+        }
     }
 
-    pub fn process(
-        &self,
-        graph: &Graph,
-        inputs: &[(&Source, &GrayImage)]
+    pub fn process(&self, inputs: &[(&Source, &GrayImage)]
     ) -> HashMap<String, GrayImage> {
-        assert_eq!(graph.inputs().len(), self.num_inputs);
-        assert_eq!(graph.outputs().len(), self.num_outputs);
-
-        for source in graph.inputs() {
+        for source in &self.inputs {
             match inputs.iter().find(|i| &i.0.name == source) {
                 None => panic!(
                     "Required source {} is not calculated and is not provided as an input",
@@ -50,7 +47,7 @@ impl Processor {
         // Assume that all images are the same size for now. This will not be true in general
         let (w, h) = inputs[0].1.dimensions();
         
-        let mut calculated_images: Vec<(String, GrayImage)> = graph.outputs()
+        let mut calculated_images: Vec<(String, GrayImage)> = self.outputs
             .iter()
             .map(|name| (name.clone(), GrayImage::new(w, h)))
             .collect();
