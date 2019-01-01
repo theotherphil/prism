@@ -1,3 +1,11 @@
+//!
+//! Runs some handwritten blur functions using the TraceImage type to generate replay
+//! visualisations.
+//!
+//! Example command line:
+//!
+//! $ cargo run --release --example trace -- -o /some/directory
+//!
 
 use std::path::PathBuf;
 use std::fs::File;
