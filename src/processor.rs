@@ -8,6 +8,7 @@ use std::collections::HashMap;
 use std::mem;
 
 pub struct Processor {
+    // TODO: needs lifetimes - can't use this after the execution engine is dropped
     function: FunctionPointer
 }
 
