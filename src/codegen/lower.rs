@@ -63,7 +63,6 @@ pub fn lower_access(
         lower_var_expr(builder, &access.x, x, y),
         lower_var_expr(builder, &access.y, x, y)
     );
-    let offset = builder.add(builder.mul(y, width), x);
     let result = builder.alloca(builder.type_i32(), 4);
 
     generate_if_then_else(
@@ -82,9 +81,10 @@ pub fn lower_access(
         },
         // then
         |_| {
+            let offset = builder.add(builder.mul(y, width), x);
             let ptr = builder.in_bounds_gep(input, offset);
             let val = builder.load(ptr, 1);
-            let ext = builder.sext(val, builder.type_i32());
+            let ext = builder.zext(val, builder.type_i32());
             builder.store(ext, result, 4);
         },
         // else
@@ -278,11 +278,15 @@ fn generate_if_then_else(
 ) {
     let pre_header = builder.get_insert_block();
 
-    let then_block = builder.new_block(llvm_func, "then");
-    let else_block = builder.new_block(llvm_func, "else");
-    let after_block = builder.new_block(llvm_func, "after");
+    let if_block = builder.new_block(llvm_func, "cond.if");
+    let then_block = builder.new_block(llvm_func, "cond.then");
+    let else_block = builder.new_block(llvm_func, "cond.else");
+    let after_block = builder.new_block(llvm_func, "cond.after");
 
     builder.position_at_end(pre_header);
+    builder.br(if_block);
+    builder.position_at_end(if_block);
+
     let cond = generate_cond(symbols);
     builder.cond_br(cond, then_block, else_block);
 

@@ -259,6 +259,12 @@ impl Builder {
         }
     }
 
+    pub fn zext(&self, val: LLVMValueRef, dest_ty: LLVMTypeRef) -> LLVMValueRef {
+        unsafe {
+            LLVMBuildZExt(self.builder, val, dest_ty, noname())
+        }
+    }
+
     pub fn and(&self, left: LLVMValueRef, right: LLVMValueRef) -> LLVMValueRef {
         unsafe {
             LLVMBuildAnd(self.builder, left, right, noname())

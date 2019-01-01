@@ -24,7 +24,7 @@ fn example_image(width: usize, height: usize) -> GrayImage {
     let mut image = GrayImage::new(width, height);
     for y in 0..height {
         for x in 0..width {
-            image.set(x, y, (10 * (x % 10 + y % 10) as u8) + 50);
+            image.set(x, y, ((x / 5 + y / 5) % 2) as u8 * 200);
         }
     }
     image
@@ -52,7 +52,7 @@ fn run_process_image(context: &Context) {
     let processor = engine.get_processor("process_image", &graph);
 
     println!("Running function");
-    let image = example_image(100, 50);
+    let image = example_image(30, 10);
     let inputs = [(String::from("in"), &image)];
     let results = processor.process(&graph, &inputs);
 
