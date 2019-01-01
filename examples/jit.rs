@@ -31,16 +31,22 @@ fn example_image(width: usize, height: usize) -> GrayImage {
 }
 
 fn run_process_image(context: &Context) {
-    let graph = Graph::new(vec![
-        Func::new(
-            "blur_h",
-            (read("in", x() - 1, y()) + read("in", x(), y()) + read("in", x() + 1, y())) / 3
-        ),
-        Func::new(
-            "blur_v",
-            (read("blur_h", x(), y() - 1) + read("blur_h", x(), y()) + read("blur_h", x(), y() + 1)) / 3
-        )
-    ]);
+    let (x, y) = (Var::X, Var::Y);
+    let input = Source::new("in");
+
+    let blur_h = Func::new(
+        "blur_h", {
+        let sum = input.at(x - 1, y) + input.at(x, y) + input.at(x + 1, y);
+        sum / 3
+    });
+
+    let blur_v = Func::new(
+        "blur_v", {
+        let sum = blur_h.at(x, y - 1) + blur_h.at(x, y) + blur_h.at(x, y + 1);
+        sum / 3
+    });
+
+    let graph = Graph::new(vec![blur_h, blur_v]);
 
     println!("Creating module");
     let module = create_optimised_module(context, &graph);
@@ -52,7 +58,7 @@ fn run_process_image(context: &Context) {
     let processor = engine.get_processor("process_image", &graph);
 
     println!("Running function");
-    let image = example_image(30, 10);
+    let image = example_image(20, 10);
     let inputs = [(String::from("in"), &image)];
     let results = processor.process(&graph, &inputs);
 

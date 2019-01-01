@@ -206,20 +206,20 @@ pub fn create_process_image_module(context: &Context, graph: &Graph) -> Module {
     let y_max = builder.trunc(height, builder.type_i32());
     let x_max = builder.trunc(width, builder.type_i32());
 
-    let generate_x_body = |symbols: &mut SymbolTable| {
-        for func in graph.funcs() {
-            lower_func(&builder, llvm_func, func, x_max, y_max, &mut *symbols);
-        }
-    };
-    let generate_y_body = |symbols| {
-        generate_loop(&builder, "x", x_max, llvm_func, symbols, generate_x_body);
-    };
-
     let mut symbols = SymbolTable::new();
     for (i, b) in buffer_names.iter().enumerate() {
         symbols.add(b, params[3 * i]);
     }
-    generate_loop(&builder, "y", y_max, llvm_func, &mut symbols, generate_y_body);
+
+    for func in graph.funcs() {
+        let generate_x_body = |symbols: &mut SymbolTable| {
+            lower_func(&builder, llvm_func, func, x_max, y_max, &mut *symbols);
+        };
+        let generate_y_body = |symbols| {
+            generate_loop(&builder, "x", x_max, llvm_func, symbols, generate_x_body);
+        };
+        generate_loop(&builder, "y", y_max, llvm_func, &mut symbols, generate_y_body);
+    }
 
     builder.ret_void();
     Module::new(module)

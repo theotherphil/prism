@@ -63,6 +63,41 @@ macro_rules! impl_var_expr_bin_op {
                 $ctor(Box::new(VarExpr::Const(self)), Box::new(rhs))
             }
         }
+
+        impl $trait_name<VarExpr> for Var {
+            type Output = VarExpr;
+            fn $trait_op(self, rhs: VarExpr) -> VarExpr {
+                $ctor(Box::new(VarExpr::Var(self)), Box::new(rhs))
+            }
+        }
+
+        impl $trait_name<Var> for VarExpr {
+            type Output = VarExpr;
+            fn $trait_op(self, rhs: Var) -> VarExpr {
+                $ctor(Box::new(self), Box::new(VarExpr::Var(rhs)))
+            }
+        }
+
+        impl $trait_name<i32> for Var {
+            type Output = VarExpr;
+            fn $trait_op(self, rhs: i32) -> VarExpr {
+                $ctor(Box::new(VarExpr::Var(self)), Box::new(VarExpr::Const(rhs)))
+            }
+        }
+
+        impl $trait_name<Var> for i32 {
+            type Output = VarExpr;
+            fn $trait_op(self, rhs: Var) -> VarExpr {
+                $ctor(Box::new(VarExpr::Const(self)), Box::new(VarExpr::Var(rhs)))
+            }
+        }
+
+        impl $trait_name<Var> for Var {
+            type Output = VarExpr;
+            fn $trait_op(self, rhs: Var) -> VarExpr {
+                $ctor(Box::new(VarExpr::Var(self)), Box::new(VarExpr::Var(rhs)))
+            }
+        }
     };
 }
 
@@ -70,9 +105,11 @@ impl_var_expr_bin_op!(Add, add, VarExpr::Add);
 impl_var_expr_bin_op!(Sub, sub, VarExpr::Sub);
 impl_var_expr_bin_op!(Mul, mul, VarExpr::Mul);
 
-// We could also define static X and Y variables
-pub const fn x() -> VarExpr { VarExpr::Var(Var::X) }
-pub const fn y() -> VarExpr { VarExpr::Var(Var::Y) }
+impl Into<VarExpr> for Var {
+    fn into(self) -> VarExpr {
+        VarExpr::Var(self)
+    }
+}
 
 impl PrettyPrint for VarExpr {
     fn pretty_print(&self) -> String {
@@ -179,10 +216,6 @@ impl_definition_bin_op!(Sub, sub, Definition::Sub);
 impl_definition_bin_op!(Mul, mul, Definition::Mul);
 impl_definition_bin_op!(Div, div, Definition::Div);
 
-pub fn read(source: &str, x: VarExpr, y: VarExpr) -> Definition {
-    Definition::Access(Access::new(source, x, y))
-}
-
 impl PrettyPrint for Definition {
     fn pretty_print(&self) -> String {
         match self {
@@ -220,6 +253,33 @@ impl Func {
     /// in this func's definition
     pub fn sources(&self) -> Vec<String> {
         self.definition.sources()
+    }
+
+    pub fn at<U, V>(&self, x: U, y: V) -> Definition
+    where
+        U: Into<VarExpr>,
+        V: Into<VarExpr>
+    {
+        Definition::Access(Access::new(&self.name, x.into(), y.into()))
+    }
+}
+
+/// An image provided as an input
+pub struct Source {
+    name: String
+}
+
+impl Source {
+    pub fn new(name: &str) -> Source {
+        Source { name: name.to_string() }
+    }
+
+    pub fn at<U, V>(&self, x: U, y: V) -> Definition
+    where
+        U: Into<VarExpr>,
+        V: Into<VarExpr>
+    {
+        Definition::Access(Access::new(&self.name, x.into(), y.into()))
     }
 }
 
@@ -279,24 +339,28 @@ impl Graph {
 mod tests {
     use super::*;
 
-    fn assert_pretty_print(expr: VarExpr, expected: &str) {
+    fn assert_pretty_print<V: Into<VarExpr>>(expr: V, expected: &str) {
+        let expr: VarExpr = expr.into();
         assert_eq!(expr.pretty_print(), expected);
     }
 
     #[test]
     fn test_var_expr_pretty_print() {
-        assert_pretty_print(x(), "x");
-        assert_pretty_print(y(), "y");
-        assert_pretty_print(x() + y(), "x + y");
-        assert_pretty_print(3 * (x() - 1), "3 * (x - 1)");
+        let (x, y) = (Var::X, Var::Y);
+        assert_pretty_print(x, "x");
+        assert_pretty_print(y, "y");
+        assert_pretty_print(x + y, "x + y");
+        assert_pretty_print(3 * (x - 1), "3 * (x - 1)");
     }
 
     #[test]
     fn test_func_pretty_print() {
+        let (x, y) = (Var::X, Var::Y);
         // f(x, y) = g(x + 1, y - 1) + g(x - 1, y) + 2
+        let g = Source::new("g");
         let f = Func::new(
             "f",
-            read("g", x() + 1, y() - 1) + read("g", x() - 1, y()) + 2
+            g.at(x + 1, y - 1) + g.at(x - 1, y) + 2
         );
         assert_eq!(f.pretty_print(), "f(x, y) = (g(x + 1, y - 1) + g(x - 1, y)) + 2");
     }
