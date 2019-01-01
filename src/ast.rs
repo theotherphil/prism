@@ -236,6 +236,7 @@ impl PrettyPrint for Definition {
     }
 }
 
+#[derive(Debug, Clone)]
 pub struct Func {
     pub(crate) name: String,
     pub(crate) definition: Definition
@@ -310,6 +311,7 @@ macro_rules! func {
 
 /// Doesn't yet look very graph-like...
 pub struct Graph {
+    pub name: String,
     funcs: Vec<Func>,
     /// Names of the required input buffers,
     /// computed from funcs
@@ -321,7 +323,8 @@ pub struct Graph {
 }
 
 impl Graph {
-    pub fn new(funcs: Vec<Func>) -> Graph {
+    pub fn new(name: &str, funcs: Vec<Func>) -> Graph {
+        let name = name.to_string();
         // The names of the funcs being computed
         let func_names: HashSet<String> = funcs.iter().map(|f| f.name.clone()).collect();
         // The buffers that any func reads from
@@ -334,7 +337,7 @@ impl Graph {
         // TODO: for now we just assume that the inputs were provided in a valid order
         let outputs: Vec<String> = funcs.iter().map(|f| f.name.clone()).collect();
 
-        Graph { funcs, inputs, outputs }
+        Graph { name, funcs, inputs, outputs }
     }
 
     pub fn funcs(&self) -> &[Func] {

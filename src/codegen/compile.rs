@@ -89,8 +89,8 @@ impl ExecutionEngine {
     }
 
     /// Grimness
-    pub fn get_processor(&self, name: &str, graph: &Graph) -> Processor {
-        let addr = self.get_func_addr(name);
+    pub fn get_processor(&self, graph: &Graph) -> Processor {
+        let addr = self.get_func_addr(&graph.name);
         Processor::new(graph, addr)
     }
 }

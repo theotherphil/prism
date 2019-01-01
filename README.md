@@ -10,14 +10,14 @@ Not a lot is implemented yet, but it is possible to JIT and run a basic image pi
     source!(input);
     func!(blur_h = (input.at(x - 1, y) + input.at(x, y) + input.at(x + 1, y)) / 3);
     func!(blur_v = (blur_h.at(x, y - 1) + blur_h.at(x, y) + blur_h.at(x, y + 1)) / 3);
-    let graph = Graph::new(vec![blur_h, blur_v]);
+    let graph = Graph::new("blur3x3", vec![blur_h, blur_v]);
 
     // Generate LLVM IR
     let module = create_optimised_module(context, &graph);
 
     // Generate native code
     let engine = ExecutionEngine::new(module);
-    let processor = engine.get_processor("process_image", &graph);
+    let processor = engine.get_processor(&graph);
 
     // Run the generated code
     let inputs = [(&input, &example_image(20, 10))];

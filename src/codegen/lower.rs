@@ -178,9 +178,9 @@ impl SymbolTable {
     }
 }
 
-pub fn create_process_image_module(context: &Context, graph: &Graph) -> Module {
+pub fn create_ir_module(context: &Context, graph: &Graph) -> Module {
     assert!(graph.funcs().len() > 0);
-    let module = context.new_module("process_image");
+    let module = context.new_module(&graph.name);
     let builder = Builder::new(context);
 
     let buffer_names = graph.inputs().iter()
@@ -194,7 +194,7 @@ pub fn create_process_image_module(context: &Context, graph: &Graph) -> Module {
         llvm_func_params.push(builder.type_i64());
     }
     let llvm_func_type = builder.func_type(builder.type_void(), &mut llvm_func_params);
-    let llvm_func = builder.add_func(module, "process_image", llvm_func_type);
+    let llvm_func = builder.add_func(module, &graph.name, llvm_func_type);
     let params = builder.get_params(llvm_func);
 
     // We currently assume that all input buffers will have the same dimensions
