@@ -8,8 +8,6 @@
 //! $ cargo run --example jit -- -o /some/directory
 //!
 
-extern crate llvm_sys as llvm;
-
 use std::{io::Result, path::{Path, PathBuf}};
 use prism::{*, codegen::*};
 use structopt::StructOpt;
