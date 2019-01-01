@@ -6,6 +6,14 @@ use std::{
     path::Path
 };
 
+pub fn load_from_png<I: AsRef<Path>>(i: I) -> Result<GrayImage> {
+    let decoder = png::Decoder::new(File::open(i.as_ref())?);
+    let (info, mut reader) = decoder.read_info().unwrap();
+    let mut buf = vec![0; info.buffer_size()];
+    reader.next_frame(&mut buf).unwrap();
+    Ok(GrayImage::from_raw(info.width as usize, info.height as usize, buf))
+}
+
 pub fn save_to_png<I: AsRef<Path>>(image: &GrayImage, i: I) -> Result<()> {
     use png::HasParameters;
 
