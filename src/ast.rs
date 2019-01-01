@@ -126,7 +126,8 @@ impl PrettyPrint for Access {
 #[derive(Debug, Clone)]
 pub enum Definition {
     Access(Access),
-    Const(i8),
+    // All intermediate calculations happen at type i32 for now
+    Const(i32),
     // TODO: share code for printing and lowering arithmetic expressions
     // TODO: between VarExpr and Definition
     Add(Box<Definition>, Box<Definition>),
@@ -157,14 +158,14 @@ macro_rules! impl_definition_bin_op {
             }
         }
 
-        impl $trait_name<i8> for Definition {
+        impl $trait_name<i32> for Definition {
             type Output = Definition;
-            fn $trait_op(self, rhs: i8) -> Definition {
+            fn $trait_op(self, rhs: i32) -> Definition {
                 $ctor(Box::new(self), Box::new(Definition::Const(rhs)))
             }
         }
 
-        impl $trait_name<Definition> for i8 {
+        impl $trait_name<Definition> for i32 {
             type Output = Definition;
             fn $trait_op(self, rhs: Definition) -> Definition {
                 $ctor(Box::new(Definition::Const(self)), Box::new(rhs))

@@ -53,7 +53,7 @@ pub fn lower_access(
     // i32, width of input image
     width: LLVMValueRef,
     symbols: &mut SymbolTable
-    // return value has type i8
+    // return value has type i32
 ) -> LLVMValueRef {
     let input  = symbols.get(&access.source);
     let x = symbols.get("x");
@@ -64,7 +64,8 @@ pub fn lower_access(
     );
     let offset = builder.add(builder.mul(y, width), x);
     let ptr = builder.in_bounds_gep(input, offset);
-    builder.load(ptr, 1)
+    let val = builder.load(ptr, 1);
+    builder.sext(val, builder.type_i32())
 }
 
 pub fn lower_definition(
@@ -73,11 +74,11 @@ pub fn lower_definition(
     definition: &Definition,
     width: LLVMValueRef,
     symbols: &mut SymbolTable
-    // return value has type i8
+    // return value has type i32
 ) -> LLVMValueRef {
     match definition {
         Definition::Access(a) => lower_access(builder, a, width, symbols),
-        Definition::Const(c) => builder.const_i8(*c),
+        Definition::Const(c) => builder.const_i32(*c),
         Definition::Add(l, r) => {
             let left = lower_definition(builder, l, width, symbols);
             let right = lower_definition(builder, r, width, symbols);
@@ -112,7 +113,8 @@ pub fn lower_func(
     let val = lower_definition(builder, &func.definition, width, symbols);
     let offset = builder.add(builder.mul(symbols.get("y"), width), symbols.get("x"));
     let ptr = builder.in_bounds_gep(symbols.get(&func.name), offset);
-    builder.store(val, ptr, 1);
+    let trunc = builder.trunc(val, builder.type_i8());
+    builder.store(trunc, ptr, 1);
 }
 
 #[derive(Debug)]

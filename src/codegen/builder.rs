@@ -248,4 +248,10 @@ impl Builder {
             LLVMBuildInBoundsGEP(self.builder, ptr, indices.as_mut_ptr(), 1, noname())
         }
     }
+
+    pub fn sext(&self, val: LLVMValueRef, dest_ty: LLVMTypeRef) -> LLVMValueRef {
+        unsafe {
+            LLVMBuildSExt(self.builder, val, dest_ty, noname())
+        }
+    }
 }
