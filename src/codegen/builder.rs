@@ -210,7 +210,11 @@ impl Builder {
         }
     }
 
-    pub fn alloca(&self, ty: LLVMTypeRef, name: &str, align: u32) -> LLVMValueRef {
+    pub fn alloca(&self, ty: LLVMTypeRef, align: u32) -> LLVMValueRef {
+        self.named_alloca(ty, "", align)
+    }
+
+    pub fn named_alloca(&self, ty: LLVMTypeRef, name: &str, align: u32) -> LLVMValueRef {
         unsafe {
             let name = CString::new(name).unwrap();
             let a = LLVMBuildAlloca(self.builder, ty, name.as_ptr());
@@ -252,6 +256,24 @@ impl Builder {
     pub fn sext(&self, val: LLVMValueRef, dest_ty: LLVMTypeRef) -> LLVMValueRef {
         unsafe {
             LLVMBuildSExt(self.builder, val, dest_ty, noname())
+        }
+    }
+
+    pub fn and(&self, left: LLVMValueRef, right: LLVMValueRef) -> LLVMValueRef {
+        unsafe {
+            LLVMBuildAnd(self.builder, left, right, noname())
+        }
+    }
+
+    pub fn or(&self, left: LLVMValueRef, right: LLVMValueRef) -> LLVMValueRef {
+        unsafe {
+            LLVMBuildOr(self.builder, left, right, noname())
+        }
+    }
+
+    pub fn xor(&self, left: LLVMValueRef, right: LLVMValueRef) -> LLVMValueRef {
+        unsafe {
+            LLVMBuildXor(self.builder, left, right, noname())
         }
     }
 }

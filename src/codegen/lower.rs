@@ -6,7 +6,6 @@ use crate::codegen::builder::*;
 use crate::codegen::compile::*;
 use crate::ast::*;
 
-/// TODO: bounds checking!
 pub fn lower_var_expr(
     builder: &Builder,
     // e.g. 3 * (x + 1) - y
@@ -43,15 +42,17 @@ pub fn lower_var_expr(
     }
 }
 
-/// We only support loading from the special "in" source for now.
-/// Return value is the value of the specified image at the given location.
-/// TODO: bounds checking!
+/// Return value is the value of the specified image at the given location,
+/// sign extended to an i32, or 0i32 if the access is out of bounds
 pub fn lower_access(
     builder: &Builder,
+    llvm_func: LLVMValueRef,
     // e.g. in(3 * (x + 1) - y, 2 * x)
     access: &Access,
     // i32, width of input image
     width: LLVMValueRef,
+    // i32, height of input image
+    height: LLVMValueRef,
     symbols: &mut SymbolTable
     // return value has type i32
 ) -> LLVMValueRef {
@@ -63,40 +64,68 @@ pub fn lower_access(
         lower_var_expr(builder, &access.y, x, y)
     );
     let offset = builder.add(builder.mul(y, width), x);
-    let ptr = builder.in_bounds_gep(input, offset);
-    let val = builder.load(ptr, 1);
-    builder.sext(val, builder.type_i32())
+    let result = builder.alloca(builder.type_i32(), 4);
+
+    generate_if_then_else(
+        builder,
+        llvm_func,
+        symbols,
+        // if
+        |_| {
+            let x_positive = builder.icmp_sge(x, builder.const_i32(0));
+            let x_lt_width = builder.icmp_slt(x, width);
+            let y_positive = builder.icmp_sge(y, builder.const_i32(0));
+            let y_lt_height = builder.icmp_slt(y, height);
+            let x_valid = builder.and(x_positive, x_lt_width);
+            let y_valid = builder.and(y_positive, y_lt_height);
+            builder.and(x_valid, y_valid)
+        },
+        // then
+        |_| {
+            let ptr = builder.in_bounds_gep(input, offset);
+            let val = builder.load(ptr, 1);
+            let ext = builder.sext(val, builder.type_i32());
+            builder.store(ext, result, 4);
+        },
+        // else
+        |_| {
+            builder.store(builder.const_i32(0), result, 4);
+        });
+
+    builder.load(result, 4)
 }
 
 pub fn lower_definition(
     builder: &Builder,
+    llvm_func: LLVMValueRef,
     // e.g. in(x, y) + in(x, y - 1)
     definition: &Definition,
     width: LLVMValueRef,
+    height: LLVMValueRef,
     symbols: &mut SymbolTable
     // return value has type i32
 ) -> LLVMValueRef {
     match definition {
-        Definition::Access(a) => lower_access(builder, a, width, symbols),
+        Definition::Access(a) => lower_access(builder, llvm_func, a, width, height, symbols),
         Definition::Const(c) => builder.const_i32(*c),
         Definition::Add(l, r) => {
-            let left = lower_definition(builder, l, width, symbols);
-            let right = lower_definition(builder, r, width, symbols);
+            let left = lower_definition(builder, llvm_func, l, width, height, symbols);
+            let right = lower_definition(builder, llvm_func, r, width, height, symbols);
             builder.add(left, right)
         },
         Definition::Mul(l, r) => {
-            let left = lower_definition(builder, l, width, symbols);
-            let right = lower_definition(builder, r, width, symbols);
+            let left = lower_definition(builder, llvm_func, l, width, height, symbols);
+            let right = lower_definition(builder, llvm_func, r, width, height, symbols);
             builder.mul(left, right)
         },
         Definition::Sub(l, r) => {
-            let left = lower_definition(builder, l, width, symbols);
-            let right = lower_definition(builder, r, width, symbols);
+            let left = lower_definition(builder, llvm_func, l, width, height, symbols);
+            let right = lower_definition(builder, llvm_func, r, width, height, symbols);
             builder.sub(left, right)
         },
         Definition::Div(l, r) => {
-            let left = lower_definition(builder, l, width, symbols);
-            let right = lower_definition(builder, r, width, symbols);
+            let left = lower_definition(builder, llvm_func, l, width, height, symbols);
+            let right = lower_definition(builder, llvm_func, r, width, height, symbols);
             builder.sdiv(left, right)
         }
     }
@@ -104,13 +133,16 @@ pub fn lower_definition(
 
 pub fn lower_func(
     builder: &Builder,
+    llvm_func: LLVMValueRef,
     func: &Func,
     // i32, width of input image
     width: LLVMValueRef,
+    // i32, height of input image
+    height: LLVMValueRef,
     // must contain symbols for all mentioned images and variables
     symbols: &mut SymbolTable
 ) {
-    let val = lower_definition(builder, &func.definition, width, symbols);
+    let val = lower_definition(builder, llvm_func, &func.definition, width, height, symbols);
     let offset = builder.add(builder.mul(symbols.get("y"), width), symbols.get("x"));
     let ptr = builder.in_bounds_gep(symbols.get(&func.name), offset);
     let trunc = builder.trunc(val, builder.type_i8());
@@ -176,7 +208,7 @@ pub fn create_process_image_module(context: &Context, graph: &Graph) -> Module {
 
     let generate_x_body = |symbols: &mut SymbolTable| {
         for func in graph.funcs() {
-            lower_func(&builder, func, x_max, &mut *symbols);
+            lower_func(&builder, llvm_func, func, x_max, y_max, &mut *symbols);
         }
     };
     let generate_y_body = |symbols| {
@@ -231,3 +263,38 @@ fn generate_loop<'s>(
     // after:
     builder.position_at_end(after);
 }
+
+// The only way to call this function is to inline the closures
+// directly into the call site - if the closures are first assigned
+// to variables then the type system can't invent suitable types/borrow
+// checker can't choose correct lifetimes. That's a bit sad...
+fn generate_if_then_else(
+    builder: &Builder,
+    llvm_func: LLVMValueRef,
+    symbols: & mut SymbolTable,
+    mut generate_cond: impl FnMut(& mut SymbolTable) -> LLVMValueRef,
+    mut generate_then: impl FnMut(& mut SymbolTable),
+    mut generate_else: impl FnMut(& mut SymbolTable)
+) {
+    let pre_header = builder.get_insert_block();
+
+    let then_block = builder.new_block(llvm_func, "then");
+    let else_block = builder.new_block(llvm_func, "else");
+    let after_block = builder.new_block(llvm_func, "after");
+
+    builder.position_at_end(pre_header);
+    let cond = generate_cond(symbols);
+    builder.cond_br(cond, then_block, else_block);
+
+    builder.position_at_end(then_block);
+    generate_then(symbols);
+    builder.br(after_block);
+
+    builder.position_at_end(else_block);
+    // Might want to make this optional in general
+    generate_else(symbols);
+    builder.br(after_block);
+
+    builder.position_at_end(after_block);
+}
+
