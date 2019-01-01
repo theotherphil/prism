@@ -294,6 +294,20 @@ impl PrettyPrint for Func {
     }
 }
 
+#[macro_export]
+macro_rules! source {
+    ($name:ident) => {
+        let $name = Source::new(stringify!($name));
+    }
+}
+
+#[macro_export]
+macro_rules! func {
+    ($name:ident = $($rest:tt)*) => {
+        let $name = Func::new(stringify!($name), $($rest)*);
+    }
+}
+
 /// Doesn't yet look very graph-like...
 pub struct Graph {
     funcs: Vec<Func>,

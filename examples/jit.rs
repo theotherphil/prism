@@ -34,20 +34,9 @@ fn example_image(width: usize, height: usize) -> GrayImage {
 
 fn run_process_image(context: &Context, dir: &Path) {
     let (x, y) = (Var::X, Var::Y);
-    let input = Source::new("in");
-
-    let blur_h = Func::new(
-        "blur_h", {
-        let sum = input.at(x - 1, y) + input.at(x, y) + input.at(x + 1, y);
-        sum / 3
-    });
-
-    let blur_v = Func::new(
-        "blur_v", {
-        let sum = blur_h.at(x, y - 1) + blur_h.at(x, y) + blur_h.at(x, y + 1);
-        sum / 3
-    });
-
+    source!(input);
+    func!(blur_h = (input.at(x - 1, y) + input.at(x, y) + input.at(x + 1, y)) / 3);
+    func!(blur_v = (blur_h.at(x, y - 1) + blur_h.at(x, y) + blur_h.at(x, y + 1)) / 3);
     let graph = Graph::new(vec![blur_h, blur_v]);
 
     println!("Creating module");
