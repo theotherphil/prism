@@ -265,8 +265,9 @@ impl Func {
 }
 
 /// An image provided as an input
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Source {
-    name: String
+    pub name: String
 }
 
 impl Source {

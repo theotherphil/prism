@@ -39,13 +39,13 @@ impl Processor {
     pub fn process(
         &self,
         graph: &Graph,
-        inputs: &[(String, &GrayImage)]
+        inputs: &[(&Source, &GrayImage)]
     ) -> HashMap<String, GrayImage> {
         assert_eq!(graph.inputs().len(), self.function.num_inputs());
         assert_eq!(graph.outputs().len(), self.function.num_outputs());
 
         for source in graph.inputs() {
-            match inputs.iter().find(|i| &i.0 == source) {
+            match inputs.iter().find(|i| &i.0.name == source) {
                 None => panic!(
                     "Required source {} is not calculated and is not provided as an input",
                     source

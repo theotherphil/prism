@@ -1,8 +1,10 @@
 
 extern crate llvm_sys as llvm;
 
+use std::path::{Path, PathBuf};
 use prism::*;
 use prism::codegen::*;
+use structopt::StructOpt;
 
 fn create_optimised_module(context: &Context, graph: &Graph) -> Module {
     let mut module = create_process_image_module(context, &graph);
@@ -30,7 +32,7 @@ fn example_image(width: usize, height: usize) -> GrayImage {
     image
 }
 
-fn run_process_image(context: &Context) {
+fn run_process_image(context: &Context, dir: &Path) {
     let (x, y) = (Var::X, Var::Y);
     let input = Source::new("in");
 
@@ -58,8 +60,7 @@ fn run_process_image(context: &Context) {
     let processor = engine.get_processor("process_image", &graph);
 
     println!("Running function");
-    let image = example_image(20, 10);
-    let inputs = [(String::from("in"), &image)];
+    let inputs = [(&input, &example_image(20, 10))];
     let results = processor.process(&graph, &inputs);
 
     println!("Results");
@@ -68,19 +69,25 @@ fn run_process_image(context: &Context) {
     }
     for input in &inputs {
         println!("{:?}", input);
+        save_to_png(&input.1, dir.join(&(input.0.name.clone() + ".png"))).unwrap();
     }
     for result in &results {
         println!("{}: {:?}", result.0, result.1);
+        save_to_png(&result.1, dir.join(&(result.0.clone() + ".png"))).unwrap();
     }
+}
 
-    save_to_png(&image, "/Users/philip/dev/data/blur_jit_input.png").unwrap();
-    save_to_png(&results["blur_h"], "/Users/philip/dev/data/blur_jit_h.png").unwrap();
-    save_to_png(&results["blur_v"], "/Users/philip/dev/data/blur_jit_v.png").unwrap();
+#[derive(StructOpt, Debug)]
+struct Opts {
+    /// Input and output images are written to this directory
+    #[structopt(short = "o", long = "output", parse(from_os_str))]
+    output_dir: PathBuf
 }
 
 fn main() {
     initialise_llvm_jit();
     let context = Context::new();
-    run_process_image(&context);
+    let opts = Opts::from_args();
+    run_process_image(&context, &opts.output_dir);
 }
 
