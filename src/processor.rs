@@ -9,31 +9,24 @@ use std::mem;
 
 pub struct Processor {
     // TODO: needs lifetimes - can't use this after the execution engine is dropped
-    function: FunctionPointer
+    function: FunctionPointer,
+    num_inputs: usize,
+    num_outputs: usize
 }
 
 impl Processor {
     pub fn new(graph: &Graph, addr: u64) -> Processor {
-        unsafe {
-            match (graph.inputs().len(), graph.outputs().len()) {
-                (1, 1) => {
-                    Processor { function: FunctionPointer::OneInOneOut(mem::transmute(addr)) }
-                },
-                (1, 2) => {
-                    Processor { function: FunctionPointer::OneInTwoOut(mem::transmute(addr)) }
-                },
-                (2, 1) => {
-                    Processor { function: FunctionPointer::TwoInOneOut(mem::transmute(addr)) }
-                },
-                (2, 2) => {
-                    Processor { function: FunctionPointer::TwoInTwoOut(mem::transmute(addr)) }
-                },
-                (_, _) => {
-                    panic!("Unsupported signature")
-                }
+        let (num_inputs, num_outputs) = (graph.inputs().len(), graph.outputs().len());
+        let function = unsafe {
+            match (num_inputs, num_outputs) {
+                (1, 1) => FunctionPointer::OneInOneOut(mem::transmute(addr)),
+                (1, 2) => FunctionPointer::OneInTwoOut(mem::transmute(addr)),
+                (2, 1) => FunctionPointer::TwoInOneOut(mem::transmute(addr)),
+                (2, 2) => FunctionPointer::TwoInTwoOut(mem::transmute(addr)),
+                (_, _) => panic!("Unsupported signature")
             }
-        }
-        
+        };
+        Processor { function, num_inputs, num_outputs }
     }
 
     pub fn process(
@@ -41,8 +34,8 @@ impl Processor {
         graph: &Graph,
         inputs: &[(&Source, &GrayImage)]
     ) -> HashMap<String, GrayImage> {
-        assert_eq!(graph.inputs().len(), self.function.num_inputs());
-        assert_eq!(graph.outputs().len(), self.function.num_outputs());
+        assert_eq!(graph.inputs().len(), self.num_inputs);
+        assert_eq!(graph.outputs().len(), self.num_outputs);
 
         for source in graph.inputs() {
             match inputs.iter().find(|i| &i.0.name == source) {
@@ -133,24 +126,4 @@ pub enum FunctionPointer {
         *mut u8, usize, usize,
         *mut u8, usize, usize
     )),
-}
-
-impl FunctionPointer {
-    fn num_inputs(&self) -> usize {
-        self.signature().0
-    }
-
-    fn num_outputs(&self) -> usize {
-        self.signature().1
-    }
-
-    // Returns (num_input, num_outputs)
-    fn signature(&self) -> (usize, usize) {
-        match self {
-            FunctionPointer::OneInOneOut(_) => (1, 1),
-            FunctionPointer::OneInTwoOut(_) => (1, 2),
-            FunctionPointer::TwoInOneOut(_) => (2, 1),
-            FunctionPointer::TwoInTwoOut(_) => (2, 2)
-        }
-    }
 }
