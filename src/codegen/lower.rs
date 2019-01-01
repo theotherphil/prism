@@ -144,17 +144,17 @@ impl SymbolTable {
     }
 }
 
-pub fn create_process_image_module(
-    context: &Context,
-    funcs: &[&Func],
-    buffer_names: &[&str]
-) -> Module {
-    assert!(buffer_names.len() > 0);
+pub fn create_process_image_module(context: &Context, graph: &Graph) -> Module {
+    assert!(graph.funcs().len() > 0);
     let module = context.new_module("process_image");
     let builder = Builder::new(context);
 
+    let buffer_names = graph.inputs().iter()
+        .chain(graph.outputs())
+        .collect::<Vec<_>>();
+
     let mut llvm_func_params = vec![];
-    for _ in buffer_names {
+    for _ in &buffer_names {
         llvm_func_params.push(builder.type_i8_ptr());
         llvm_func_params.push(builder.type_i64());
         llvm_func_params.push(builder.type_i64());
@@ -173,8 +173,7 @@ pub fn create_process_image_module(
     let x_max = builder.trunc(width, builder.type_i32());
 
     let generate_x_body = |symbols: &mut SymbolTable| {
-        // TODO: don't assume the provided funcs are already in dependency order
-        for func in funcs {
+        for func in graph.funcs() {
             lower_func(&builder, func, x_max, &mut *symbols);
         }
     };

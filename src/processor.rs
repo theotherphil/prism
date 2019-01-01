@@ -4,33 +4,17 @@
 use crate::traits::*;
 use crate::buffer::*;
 use crate::ast::*;
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 use std::mem;
 
 pub struct Processor {
     function: FunctionPointer
 }
 
-// Returns (num inputs, num outputs)
-fn sources(funcs: &[&Func]) -> (usize, usize) {
-    // All this function-runtime rubbish has to go
-    let func_sources: HashSet<String> = funcs
-        .iter()
-        .flat_map(|f| f.sources())
-        .collect();
-
-    let names: HashSet<String> = funcs
-        .iter()
-        .map(|f| f.name.clone())
-        .collect();
-
-    (func_sources.difference(&names).count(), funcs.len())
-}
-
 impl Processor {
-    pub fn new(funcs: &[&Func], addr: u64) -> Processor {
+    pub fn new(graph: &Graph, addr: u64) -> Processor {
         unsafe {
-            match sources(funcs) {
+            match (graph.inputs().len(), graph.outputs().len()) {
                 (1, 1) => {
                     Processor { function: FunctionPointer::OneInOneOut(mem::transmute(addr)) }
                 },
@@ -53,45 +37,28 @@ impl Processor {
 
     pub fn process(
         &self,
-        inputs: &[(String, &GrayImage)],
-        funcs: &[&Func]
+        graph: &Graph,
+        inputs: &[(String, &GrayImage)]
     ) -> HashMap<String, GrayImage> {
-        assert_eq!(inputs.len(), self.function.num_inputs());
-        assert_eq!(funcs.len(), self.function.num_outputs());
+        assert_eq!(graph.inputs().len(), self.function.num_inputs());
+        assert_eq!(graph.outputs().len(), self.function.num_outputs());
 
-        let mut func_sources: Vec<String> = funcs
-            .iter()
-            .flat_map(|f| f.sources())
-            .collect();
-
-        func_sources.sort();
-        func_sources.dedup();
-
-        let calculated_funcs: HashSet<String> = funcs
-            .iter()
-            .map(|f| f.name.clone())
-            .collect();
-
-        let input_funcs: HashSet<String> = inputs
-            .iter()
-            .map(|i| i.0.clone())
-            .collect();
-
-        for source in func_sources {
-            if !calculated_funcs.contains(&source) && !input_funcs.contains(&source) {
-                panic!(
+        for source in graph.inputs() {
+            match inputs.iter().find(|i| &i.0 == source) {
+                None => panic!(
                     "Required source {} is not calculated and is not provided as an input",
                     source
-                );
+                ),
+                _ => { }
             }
         }
 
         // Assume that all images are the same size for now. This will not be true in general
         let (w, h) = inputs[0].1.dimensions();
         
-        let mut calculated_images: Vec<(String, GrayImage)> = funcs
+        let mut calculated_images: Vec<(String, GrayImage)> = graph.outputs()
             .iter()
-            .map(|f| (f.name.clone(), GrayImage::new(w, h)))
+            .map(|name| (name.clone(), GrayImage::new(w, h)))
             .collect();
 
         match self.function {

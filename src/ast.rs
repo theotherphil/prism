@@ -1,6 +1,7 @@
 
 use std::fmt;
 use std::ops::{Add, Div, Mul, Sub};
+use std::collections::HashSet;
 use crate::pretty_print::*;
 
 // [NOTE: AST terminology]
@@ -228,6 +229,48 @@ impl PrettyPrint for Func {
 
     fn is_leaf(&self) -> bool {
         true
+    }
+}
+
+/// Doesn't yet look very graph-like...
+pub struct Graph {
+    funcs: Vec<Func>,
+    /// Names of the required input buffers,
+    /// computed from funcs
+    inputs: Vec<String>,
+    /// Names of the output buffers (including)
+    /// all intermediates), in some valid dependency
+    /// order
+    outputs: Vec<String>
+}
+
+impl Graph {
+    pub fn new(funcs: Vec<Func>) -> Graph {
+        // The names of the funcs being computed
+        let func_names: HashSet<String> = funcs.iter().map(|f| f.name.clone()).collect();
+        // The buffers that any func reads from
+        let reads: HashSet<String> = funcs.iter().flat_map(|f| f.sources()).collect();
+        // The buffers that are read from but not
+        // computed and so must be provided as inputs
+        let mut inputs: Vec<String> = reads.difference(&func_names).cloned().collect();
+        inputs.sort();
+        // TODO: actually do the topological sort!
+        // TODO: for now we just assume that the inputs were provided in a valid order
+        let outputs: Vec<String> = funcs.iter().map(|f| f.name.clone()).collect();
+
+        Graph { funcs, inputs, outputs }
+    }
+
+    pub fn funcs(&self) -> &[Func] {
+        &self.funcs
+    }
+
+    pub fn inputs(&self) -> &[String] {
+        &self.inputs
+    }
+
+    pub fn outputs(&self) -> &[String] {
+        &self.outputs
     }
 }
 
