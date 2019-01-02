@@ -85,6 +85,9 @@ impl Builder {
     impl_llvm_binary_op!(mul, LLVMBuildMul);
     impl_llvm_binary_op!(sub, LLVMBuildSub);
     impl_llvm_binary_op!(sdiv, LLVMBuildSDiv);
+    impl_llvm_binary_op!(and, LLVMBuildAnd);
+    impl_llvm_binary_op!(or, LLVMBuildOr);
+    impl_llvm_binary_op!(xor, LLVMBuildXor);
 
     impl_icmp!(icmp_eq, LLVMIntEQ);
     impl_icmp!(icmp_ne, LLVMIntNE);
@@ -262,24 +265,6 @@ impl Builder {
     pub fn zext(&self, val: LLVMValueRef, dest_ty: LLVMTypeRef) -> LLVMValueRef {
         unsafe {
             LLVMBuildZExt(self.builder, val, dest_ty, noname())
-        }
-    }
-
-    pub fn and(&self, left: LLVMValueRef, right: LLVMValueRef) -> LLVMValueRef {
-        unsafe {
-            LLVMBuildAnd(self.builder, left, right, noname())
-        }
-    }
-
-    pub fn or(&self, left: LLVMValueRef, right: LLVMValueRef) -> LLVMValueRef {
-        unsafe {
-            LLVMBuildOr(self.builder, left, right, noname())
-        }
-    }
-
-    pub fn xor(&self, left: LLVMValueRef, right: LLVMValueRef) -> LLVMValueRef {
-        unsafe {
-            LLVMBuildXor(self.builder, left, right, noname())
         }
     }
 }
