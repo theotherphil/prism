@@ -16,29 +16,13 @@ pub fn lower_var_expr(
     y: LLVMValueRef
     // return value has type i32
 ) -> LLVMValueRef {
+    let recurse = |v| lower_var_expr(builder, v, x, y);
     match expr {
-        VarExpr::Var(v) => {
-            match v {
-                Var::X => x,
-                Var::Y => y
-            }
-        },
+        VarExpr::Var(v) => match v { Var::X => x, Var::Y => y },
         VarExpr::Const(c) => builder.const_i32(*c),
-        VarExpr::Add(l, r) => {
-            let left = lower_var_expr(builder, l, x, y);
-            let right = lower_var_expr(builder, r, x, y);
-            builder.add(left, right)
-        },
-        VarExpr::Sub(l, r) => {
-            let left = lower_var_expr(builder, l, x, y);
-            let right = lower_var_expr(builder, r, x, y);
-            builder.sub(left, right)
-        },
-        VarExpr::Mul(l, r) => {
-            let left = lower_var_expr(builder, l, x, y);
-            let right = lower_var_expr(builder, r, x, y);
-            builder.mul(left, right)
-        },
+        VarExpr::Add(l, r) => builder.add(recurse(l), recurse(r)),
+        VarExpr::Sub(l, r) => builder.sub(recurse(l), recurse(r)),
+        VarExpr::Mul(l, r) => builder.mul(recurse(l), recurse(r)),
     }
 }
 
@@ -105,29 +89,14 @@ pub fn lower_definition(
     symbols: &mut SymbolTable
     // return value has type i32
 ) -> LLVMValueRef {
+    let mut recurse = |v| lower_definition(builder, llvm_func, v, width, height, symbols);
     match definition {
         Definition::Access(a) => lower_access(builder, llvm_func, a, width, height, symbols),
         Definition::Const(c) => builder.const_i32(*c),
-        Definition::Add(l, r) => {
-            let left = lower_definition(builder, llvm_func, l, width, height, symbols);
-            let right = lower_definition(builder, llvm_func, r, width, height, symbols);
-            builder.add(left, right)
-        },
-        Definition::Mul(l, r) => {
-            let left = lower_definition(builder, llvm_func, l, width, height, symbols);
-            let right = lower_definition(builder, llvm_func, r, width, height, symbols);
-            builder.mul(left, right)
-        },
-        Definition::Sub(l, r) => {
-            let left = lower_definition(builder, llvm_func, l, width, height, symbols);
-            let right = lower_definition(builder, llvm_func, r, width, height, symbols);
-            builder.sub(left, right)
-        },
-        Definition::Div(l, r) => {
-            let left = lower_definition(builder, llvm_func, l, width, height, symbols);
-            let right = lower_definition(builder, llvm_func, r, width, height, symbols);
-            builder.sdiv(left, right)
-        }
+        Definition::Add(l, r) => builder.add(recurse(l), recurse(r)),
+        Definition::Mul(l, r) => builder.mul(recurse(l), recurse(r)),
+        Definition::Sub(l, r) => builder.sub(recurse(l), recurse(r)),
+        Definition::Div(l, r) => builder.sdiv(recurse(l), recurse(r))
     }
 }
 
