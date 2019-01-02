@@ -2,6 +2,7 @@
 // TODO: read up on halide, futhark, weld
 // TODO: https://suif.stanford.edu/papers/wolf91a.pdf
 // TODO: http://dpzmick.com/2016/08/11/rust-jit-image-processing/
+// TODO: https://github.com/jauhien/iron-kaleidoscope
 
 #![feature(test)]
 extern crate test;

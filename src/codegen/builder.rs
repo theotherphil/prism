@@ -7,7 +7,10 @@
 use llvm::prelude::*;
 use llvm::core::*;
 use llvm::*;
-use libc::c_char;
+use llvm::support::*;
+use std::mem;
+use std::ptr;
+use libc::{c_char, c_void};
 use std::ffi::CString;
 use crate::codegen::compile::*;
 
@@ -107,10 +110,41 @@ impl Builder {
         }
     }
 
+    pub fn const_i64(&self, value: i64) -> LLVMValueRef {
+        unsafe {
+            const SIGN_EXTEND: LLVMBool = 0;
+            LLVMConstInt(self.type_i64(), value as ::libc::c_ulonglong, SIGN_EXTEND)
+        }
+    }
+
     pub fn const_i8(&self, value: i8) -> LLVMValueRef {
         unsafe {
             const SIGN_EXTEND: LLVMBool = 0;
             LLVMConstInt(self.type_i8(), value as ::libc::c_ulonglong, SIGN_EXTEND)
+        }
+    }
+
+    pub fn const_string(&self, value: &str) -> LLVMValueRef {
+        unsafe {
+            let value = CString::new(value).unwrap();
+            LLVMConstStringInContext(
+                self.context,
+                value.as_ptr(),
+                value.as_bytes_with_nul().len() as u32,
+                1
+            )
+        }
+    }
+
+    pub fn const_null(&self, ty: LLVMTypeRef) -> LLVMValueRef {
+        unsafe { LLVMConstNull(ty) }
+    }
+
+    pub fn global_string(&self, value: &str, name: &str) -> LLVMValueRef {
+        unsafe {
+            let value = CString::new(value).unwrap();
+            let name = CString::new(name).unwrap();
+            LLVMBuildGlobalString(self.builder, value.as_ptr(), name.as_ptr())
         }
     }
 
@@ -265,6 +299,36 @@ impl Builder {
     pub fn zext(&self, val: LLVMValueRef, dest_ty: LLVMTypeRef) -> LLVMValueRef {
         unsafe {
             LLVMBuildZExt(self.builder, val, dest_ty, noname())
+        }
+    }
+
+    pub fn build_function_call(
+        &self,
+        func: LLVMValueRef,
+        args: &mut[LLVMValueRef]
+    ) -> LLVMValueRef {
+        unsafe {
+            LLVMBuildCall(self.builder, func, args.as_mut_ptr(), args.len() as u32, noname())
+        }
+    }
+
+    pub fn add_symbol(&self, name: &str, ptr: *const ()) {
+        unsafe {
+            let name = CString::new(name).unwrap();
+            let addr = ptr as *mut c_void;
+            LLVMAddSymbol(name.as_ptr(), addr);
+        }
+    }
+
+    pub fn address_of_symbol(&self, symbol: &str) -> Option<u64> {
+        unsafe {
+            let symbol = CString::new(symbol).unwrap();
+            let addr = LLVMSearchForAddressOfSymbol(symbol.as_ptr());
+            if addr == ptr::null_mut() {
+                return None;
+            }
+            let addr = addr as *mut u64;
+            Some(mem::transmute(*addr))
         }
     }
 }

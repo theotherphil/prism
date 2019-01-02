@@ -2,6 +2,7 @@
 
 use llvm::prelude::*;
 use std::collections::HashMap;
+use libc::c_char;
 use crate::codegen::builder::*;
 use crate::codegen::compile::*;
 use crate::ast::*;
@@ -43,6 +44,7 @@ pub fn lower_access(
     let input  = symbols.get(&access.source);
     let x = symbols.get("x");
     let y = symbols.get("y");
+    let log_read = symbols.get("log_read");
     let (x, y) = (
         lower_var_expr(builder, &access.x, x, y),
         lower_var_expr(builder, &access.y, x, y)
@@ -68,6 +70,9 @@ pub fn lower_access(
             let offset = builder.add(builder.mul(y, width), x);
             let ptr = builder.in_bounds_gep(input, offset);
             let val = builder.load(ptr, 1);
+            builder.build_function_call(
+                log_read,
+                &mut[builder.const_null(builder.type_i8_ptr()), x, y]);
             let ext = builder.zext(val, builder.type_i32());
             builder.store(ext, result, 4);
         },
@@ -112,9 +117,14 @@ pub fn lower_func(
     symbols: &mut SymbolTable
 ) {
     let val = lower_definition(builder, llvm_func, &func.definition, width, height, symbols);
-    let offset = builder.add(builder.mul(symbols.get("y"), width), symbols.get("x"));
+    let (x, y) = (symbols.get("x"), symbols.get("y"));
+    let offset = builder.add(builder.mul(y, width), x);
     let ptr = builder.in_bounds_gep(symbols.get(&func.name), offset);
     let trunc = builder.trunc(val, builder.type_i8());
+    let log_write = symbols.get("log_write");
+    builder.build_function_call(
+        log_write,
+        &mut[builder.const_null(builder.type_i8_ptr()), x, y]);
     builder.store(trunc, ptr, 1);
 }
 
@@ -147,10 +157,34 @@ impl SymbolTable {
     }
 }
 
+#[no_mangle]
+extern "C" fn log_read(_name: *const c_char, x: u32, y: u32) {
+    // TODO: actually pass the buffer names here
+    println!("READ({}, {}, {})", "TODO", x, y);
+}
+
+#[no_mangle]
+extern "C" fn log_write(_name: *const c_char, x: u32, y: u32) {
+    // TODO: actually pass the buffer names here
+    println!("WRITE({}, {}, {})", "TODO", x, y);
+}
+
 pub fn create_ir_module(context: &Context, graph: &Graph) -> Module {
     assert!(graph.funcs().len() > 0);
     let module = context.new_module(&graph.name);
     let builder = Builder::new(context);
+    let mut symbols = SymbolTable::new();
+
+    let log_funcs_type = builder.func_type(
+        builder.type_void(),
+        &mut [builder.type_i8_ptr(), builder.type_i32(), builder.type_i32()]
+    );
+    builder.add_symbol("log_read", log_read as *const());
+    builder.add_symbol("log_write", log_write as *const());
+    let log_read = builder.add_func(module, "log_read", log_funcs_type);
+    let log_write = builder.add_func(module, "log_write", log_funcs_type);
+    symbols.add("log_read", log_read);
+    symbols.add("log_write", log_write);
 
     let buffer_names = graph.inputs().iter()
         .chain(graph.outputs())
@@ -166,19 +200,28 @@ pub fn create_ir_module(context: &Context, graph: &Graph) -> Module {
     let llvm_func = builder.add_func(module, &graph.name, llvm_func_type);
     let params = builder.get_params(llvm_func);
 
+    for (i, b) in buffer_names.iter().enumerate() {
+        symbols.add(b, params[3 * i]);
+    }
+
     // We currently assume that all input buffers will have the same dimensions
     let width = params[1];
     let height = params[2];
 
     let entry = builder.new_block(llvm_func, "entry");
     builder.position_at_end(entry);
+
+    builder.build_function_call(
+        log_read,
+        &mut[builder.const_i32(20), builder.const_i32(30)]
+    );
+    builder.build_function_call(
+        log_write,
+        &mut[builder.const_i32(50), builder.const_i32(30)]
+    );
+
     let y_max = builder.trunc(height, builder.type_i32());
     let x_max = builder.trunc(width, builder.type_i32());
-
-    let mut symbols = SymbolTable::new();
-    for (i, b) in buffer_names.iter().enumerate() {
-        symbols.add(b, params[3 * i]);
-    }
 
     for func in graph.funcs() {
         let generate_x_body = |symbols: &mut SymbolTable| {

@@ -12,7 +12,8 @@ extern crate test;
 use test::black_box;
 
 #[inline(never)]
-pub fn process(src: *const u8, dst: *mut u8, width: usize, height: usize, ) {
+#[no_mangle]
+pub extern "C" fn process(src: *const u8, dst: *mut u8, width: usize, height: usize, ) {
     unsafe {
         for y in 0..height {
             for x in 0..width {
