@@ -1,15 +1,21 @@
 //! Functions for compiling LLVM IR to binary
 
-use std::mem;
-use llvm::prelude::*;
-use llvm::core::*;
-use llvm::execution_engine::*;
-use llvm::target::*;
-use llvm::ir_reader::*;
-use llvm::transforms::pass_manager_builder::*;
-use std::ffi::CString;
-use crate::processor::*;
-use crate::ast::*;
+use std::{
+    ffi::{CStr, CString},
+    fs::File,
+    io::Write,
+    mem,
+    path::Path
+};
+use llvm::{
+    core::*,
+    execution_engine::*,
+    ir_reader::*,
+    prelude::*,
+    target::*,
+    transforms::pass_manager_builder::*
+};
+use crate::{ast::*, processor::*};
 
 pub struct Context {
     // TODO: lifetimes
@@ -116,6 +122,18 @@ impl Module {
         unsafe {
             LLVMDumpModule(self.module);
         }
+    }
+
+    pub fn dump_to_string(&self) -> String {
+        unsafe {
+            let c_str = LLVMPrintModuleToString(self.module);
+            CStr::from_ptr(c_str).to_string_lossy().to_string()
+        }
+    }
+
+    pub fn dump_to_file<P: AsRef<Path>>(&self, path: P) -> std::io::Result<()> {
+        let mut file = File::create(path)?;
+        file.write_all(self.dump_to_string().as_bytes()).map(|_| ())
     }
 }
 
