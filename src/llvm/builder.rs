@@ -21,12 +21,6 @@ fn noname() -> *const c_char {
     &CNULL
 }
 
-/// Creates a nul-terminated c string literal
-#[macro_export]
-macro_rules! c_str {
-    ($s:expr) => { concat!($s, "\0").as_ptr() as *const _ };
-}
-
 pub struct Builder {
     // I need lifetimes to make this safe, and the functions
     // returning raw pointers should return references. But I'll
