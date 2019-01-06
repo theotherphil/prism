@@ -44,10 +44,8 @@ fn run(context: &Context) {
     // Declare msg global and generate call to the log function
     let entry = builder.new_block(call_func, "entry");
     builder.position_at_end(entry);
-    let msg_global = builder.global_string("a message of some kind", "msg");
-    builder.build_function_call(
-        log,
-        &mut [msg_global]);
+    let msg = builder.global_string("a message", "msg");
+    builder.build_function_call(log, &mut [msg]);
     builder.ret_void();
 
     // Dump generated IR

@@ -48,9 +48,11 @@ pub fn call_process() {
 
 #[inline(never)]
 #[no_mangle]
-pub fn call_log(msg: &str) {
+pub fn call_log(msg: &str) -> u32 {
     let msg = CString::new(msg).unwrap();
     log(msg.as_ptr() as *const _);
+    let x = 5;
+    x + 1
 }
 
 fn main() {
@@ -58,5 +60,5 @@ fn main() {
     for _ in 0..10 {
         msg.push_str("SPAM");
     }
-    call_log(&msg);
+    let _ = call_log(&msg);
 }

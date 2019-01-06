@@ -36,11 +36,11 @@ pub fn lower_access(
     height: LLVMValueRef,
     symbols: &mut SymbolTable
 ) -> LLVMValueRef {
-    let input  = symbols.get(&access.source);
+    let input = symbols.get(&access.source);
     let x = symbols.get("x");
     let y = symbols.get("y");
     let log_read = symbols.get("log_read");
-    let source = symbols.get(&access.source);
+    let source = symbols.get(&global_buffer_string_name(&access.source));
     let (x, y) = (
         lower_var_expr(builder, &access.x, x, y),
         lower_var_expr(builder, &access.y, x, y)
@@ -116,7 +116,7 @@ pub fn lower_func(
     let ptr = builder.in_bounds_gep(symbols.get(&func.name), offset);
     let trunc = builder.trunc(val, builder.type_i8());
     let log_write = symbols.get("log_write");
-    let name = symbols.get(&func.name);
+    let name = symbols.get(&global_buffer_string_name(&func.name));
     builder.build_function_call(
         log_write,
         &mut[name, x, y]);
@@ -164,6 +164,11 @@ extern "C" fn log_write(name: *const c_char, x: u32, y: u32) {
     println!("WRITE({}, {}, {})", name, x, y);
 }
 
+/// Name of the global variable used to store the given buffer name.
+fn global_buffer_string_name(name: &str) -> String {
+    String::from(name) + "_name"
+}
+
 pub fn create_ir_module(context: &Context, graph: &Graph) -> Module {
     assert!(graph.funcs().len() > 0);
     let module = context.new_module(&graph.name);
@@ -209,7 +214,7 @@ pub fn create_ir_module(context: &Context, graph: &Graph) -> Module {
 
     for name in &buffer_names {
         let global = builder.global_string(name, name);
-        symbols.add(name, global);
+        symbols.add(&global_buffer_string_name(name), global);
     }
 
     let y_max = builder.trunc(height, builder.type_i32());
