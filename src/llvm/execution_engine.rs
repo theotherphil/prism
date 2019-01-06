@@ -9,9 +9,6 @@ use llvm_sys::execution_engine::*;
 use crate::llvm::module::Module;
 
 pub struct ExecutionEngine<'c> {
-    // Need lifetimes to make this safe - need to tie
-    // lifetime of execution engine (and everything else)
-    // to the lifetime of the LLVM context we're using
     engine: LLVMExecutionEngineRef,
     // This module must not outlive the context of the module it generates code for.
     // This isn't totally clear from the LLVM docs (or at least it wasn't in the docs I found),

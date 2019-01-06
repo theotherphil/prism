@@ -8,7 +8,6 @@ use llvm_sys::{core::*, prelude::*};
 use crate::llvm::*;
 
 pub struct Context {
-    // TODO: lifetimes
     pub(crate) context: LLVMContextRef
 }
 
