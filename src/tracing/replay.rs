@@ -1,8 +1,13 @@
 //! Functions for creating animations visualising traces of image reads and writes
 
+use std::{
+    collections::HashMap,
+    convert::AsRef,
+    io::Result,
+    path::Path
+};
 use crate::tracing::*;
 use crate::image::*;
-use std::collections::HashMap;
 
 pub fn upscale<T: Copy + Zero>(image: &ImageBuffer<T>, factor: u8) -> ImageBuffer<T> {
     let (w, h) = (factor as usize * image.width(), factor as usize * image.height());
@@ -13,6 +18,14 @@ pub fn upscale<T: Copy + Zero>(image: &ImageBuffer<T>, factor: u8) -> ImageBuffe
         }
     }
     result
+}
+
+pub fn write_replay_animation<P: AsRef<Path>>(path: P, trace: &Trace, delay_in_ms: u16) -> Result<()> {
+    let replay = replay(trace);
+    let frames = replay.iter().map(|i| upscale(&i, 10)).collect::<Vec<_>>();
+    let palette = create_gif_palette();
+    animation_rgb(&frames, delay_in_ms, Some(&palette), &path)?;
+    Ok(())
 }
 
 pub fn replay(trace: &Trace) -> Vec<RgbImage> {

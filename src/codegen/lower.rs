@@ -1,9 +1,7 @@
 //! Functions for lowering the prism AST to LLVM IR
 
 use llvm_sys::prelude::*;
-use libc::c_char;
-use std::ffi::CStr;
-use crate::{syntax::*, codegen::*, llvm::*};
+use crate::{syntax::*, codegen::*, llvm::*, tracing::*};
 
 /// x and y are of type i32, return value has type i32
 pub fn lower_var_expr(
@@ -116,20 +114,8 @@ pub fn lower_func(
     let name = symbols.get(&global_buffer_string_name(&func.name));
     builder.build_function_call(
         log_write,
-        &mut[name, x, y]);
+        &mut[name, x, y, trunc]);
     builder.store(trunc, ptr, 1);
-}
-
-#[no_mangle]
-extern "C" fn log_read(name: *const c_char, x: u32, y: u32) {
-    let name = unsafe { CStr::from_ptr(name).to_string_lossy().to_string() };
-    println!("READ({}, {}, {})", name, x, y);
-}
-
-#[no_mangle]
-extern "C" fn log_write(name: *const c_char, x: u32, y: u32) {
-    let name = unsafe { CStr::from_ptr(name).to_string_lossy().to_string() };
-    println!("WRITE({}, {}, {})", name, x, y);
 }
 
 /// Name of the global variable used to store the given buffer name.
@@ -144,14 +130,18 @@ pub fn create_ir_module<'c, 'g>(context: &'c Context, graph: &'g Graph) -> Modul
 
     let mut symbols = SymbolTable::new();
 
-    let log_funcs_type = builder.func_type(
+    let log_read_type = builder.func_type(
         builder.type_void(),
         &mut [builder.type_i8_ptr(), builder.type_i32(), builder.type_i32()]
     );
+    let log_write_type = builder.func_type(
+        builder.type_void(),
+        &mut [builder.type_i8_ptr(), builder.type_i32(), builder.type_i32(), builder.type_i8()]
+    );
     builder.add_symbol("log_read", log_read as *const());
     builder.add_symbol("log_write", log_write as *const());
-    let log_read = builder.add_func(&module, "log_read", log_funcs_type);
-    let log_write = builder.add_func(&module, "log_write", log_funcs_type);
+    let log_read = builder.add_func(&module, "log_read", log_read_type);
+    let log_write = builder.add_func(&module, "log_write", log_write_type);
     symbols.add("log_read", log_read);
     symbols.add("log_write", log_write);
 

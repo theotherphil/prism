@@ -3,7 +3,7 @@
 
 use std::collections::HashMap;
 use std::mem;
-use crate::{image::*, syntax::*, llvm::*};
+use crate::{image::*, syntax::*, llvm::*, tracing::*};
 
 pub struct Processor<'c> {
     /// This fields exists solely to ensure the engine
@@ -32,6 +32,43 @@ impl<'c> Processor<'c> {
     }
 
     pub fn process(&self, inputs: &[(&Source, &GrayImage)]) -> HashMap<String, GrayImage> {
+        self.process_impl(inputs, false).0
+    }
+
+    /// Uses horrible global state for tracing.
+    pub fn process_with_tracing(
+        &self,
+        inputs: &[(&Source, &GrayImage)]
+    ) -> (HashMap<String, GrayImage>, Trace) {
+        let r = self.process_impl(inputs, true);
+        (r.0, r.1.unwrap())
+    }
+
+    fn process_impl(
+        &self,
+        inputs: &[(&Source, &GrayImage)],
+        trace: bool
+    ) -> (HashMap<String, GrayImage>, Option<Trace>) {
+        // Assume that all images are the same size for now. This will not be true in general
+        let (w, h) = inputs[0].1.dimensions();
+
+        // Initialise trace, set up the mapping from buffer names to trace ids
+        if trace {
+            let mut ids = HashMap::new();
+            let tr = Trace::new();
+
+            for input in inputs {
+                let name = input.0.name.clone();
+                let image = input.1;
+                ids.insert(name, tr.create_trace_id(image));
+            }
+            for output in &self.outputs {
+                ids.insert(output.to_string(), tr.create_trace_id(&GrayImage::new(w, h)));
+            }
+
+            unsafe { set_global_trace(ids, tr); }
+        }
+
         for source in &self.inputs {
             match inputs.iter().find(|i| &i.0.name == source) {
                 None => panic!(
@@ -42,9 +79,6 @@ impl<'c> Processor<'c> {
             }
         }
 
-        // Assume that all images are the same size for now. This will not be true in general
-        let (w, h) = inputs[0].1.dimensions();
-        
         let mut calculated_images: Vec<(String, GrayImage)> = self.outputs
             .iter()
             .map(|name| (name.clone(), GrayImage::new(w, h)))
@@ -116,6 +150,11 @@ impl<'c> Processor<'c> {
             (_, _) => panic!("Unsupported signature")
         };
 
-        calculated_images.into_iter().collect()
+        let tr = unsafe { get_global_trace() };
+        if trace {
+            unsafe { clear_global_trace(); }
+        }
+
+        (calculated_images.into_iter().collect(), tr)
     }
 }

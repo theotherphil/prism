@@ -61,7 +61,7 @@ pub struct Trace {
 }
 
 impl Trace {
-    fn new() -> Trace {
+    pub fn new() -> Trace {
         Trace {
             actions: RefCell::new(vec![]),
             initial_images: RefCell::new(vec![])

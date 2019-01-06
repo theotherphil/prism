@@ -53,12 +53,8 @@ where F: Fn(&mut TraceImageFactory, &TraceImage) -> TraceImage
     let image = t.create_from_image(&image);
     let _ = f(&mut t, &image);
 
-    let replay = replay(&t.trace);
-    let frames = replay.iter().map(|i| upscale(&i, 10)).collect::<Vec<_>>();
-
-    let palette = create_gif_palette();
     let image_path = dir.join(name.to_owned() + ".gif");
-    animation_rgb(&frames, delay_in_ms, Some(&palette), &image_path)?;
+    write_replay_animation(&image_path, &t.trace, delay_in_ms)?;
 
     Ok(image_path)
 }

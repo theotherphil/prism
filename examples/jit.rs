@@ -15,7 +15,8 @@ use prism::{
     syntax::*,
     codegen::*,
     image::*,
-    llvm::*
+    llvm::*,
+    tracing::*
 };
 use structopt::StructOpt;
 
@@ -48,8 +49,8 @@ fn run(dir: &Path) -> Result<()> {
     let processor = create_processor(module, &graph);
 
     // Run the generated code
-    let inputs = [(&input, &example_image(3, 3))];
-    let results = processor.process(&inputs);
+    let inputs = [(&input, &example_image(6, 6))];
+    let (results, trace) = processor.process_with_tracing(&inputs);
 
     // Dump the inputs, outputs and intermediates
     for func in graph.funcs() {
@@ -63,6 +64,9 @@ fn run(dir: &Path) -> Result<()> {
         println!("{}: {:?}", result.0, result.1);
         save_to_png(&result.1, dir.join(&(result.0.clone() + ".png")))?;
     }
+
+    // Create replay visualisation of all reads and writes
+    write_replay_animation(dir.join("replay.gif"), &trace, 60)?;
 
     Ok(())
 }
@@ -89,8 +93,7 @@ fn example_image(width: usize, height: usize) -> GrayImage {
     let mut image = GrayImage::new(width, height);
     for y in 0..height {
         for x in 0..width {
-            //image.set(x, y, ((x / 5 + y / 5) % 2) as u8 * 200);
-            image.set(x, y, (x + y) as u8);
+            image.set(x, y, 100 * (x / 2 % 2 + y / 2 % 2) as u8);
         }
     }
     image
