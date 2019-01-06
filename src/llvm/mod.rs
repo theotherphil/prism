@@ -27,15 +27,13 @@ pub fn initialise_llvm_jit() {
 pub fn create_module_from_ir_string<'c, 'i>(context: &'c Context, ir: &'i str) -> Module<'c> {
     use std::{ffi::CString, mem};
     use llvm_sys::{
-        core::LLVMCreateMemoryBufferWithMemoryRange,
+        core::LLVMCreateMemoryBufferWithMemoryRangeCopy,
         ir_reader::LLVMParseIRInContext
     };
 
     unsafe {
-        let ir = CString::new(ir).unwrap();
-
-        let ir_buffer = LLVMCreateMemoryBufferWithMemoryRange(
-            ir.as_ptr(), ir.as_bytes_with_nul().len(), std::ptr::null(), 1);
+        let ir_buffer = LLVMCreateMemoryBufferWithMemoryRangeCopy(
+            ir.as_ptr() as *const _, ir.as_bytes().len(), std::ptr::null());
 
         let mut module = mem::uninitialized();
         let mut message = mem::zeroed();
