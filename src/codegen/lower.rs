@@ -3,19 +3,17 @@
 use llvm::prelude::*;
 use std::collections::HashMap;
 use libc::c_char;
+use std::ffi::CStr;
 use crate::codegen::builder::*;
 use crate::codegen::compile::*;
 use crate::ast::*;
 
+/// x and y are of type i32, return value has type i32
 pub fn lower_var_expr(
     builder: &Builder,
-    // e.g. 3 * (x + 1) - y
     expr: &VarExpr,
-    // i32, current value of x variable
     x: LLVMValueRef,
-    // i32, current value of y variable
     y: LLVMValueRef
-    // return value has type i32
 ) -> LLVMValueRef {
     let recurse = |v| lower_var_expr(builder, v, x, y);
     match expr {
@@ -28,23 +26,21 @@ pub fn lower_var_expr(
 }
 
 /// Return value is the value of the specified image at the given location,
-/// sign extended to an i32, or 0i32 if the access is out of bounds
+/// sign extended to an i32, or 0i32 if the access is out of bounds.
+/// Width and height are of type i32.
 pub fn lower_access(
     builder: &Builder,
     llvm_func: LLVMValueRef,
-    // e.g. in(3 * (x + 1) - y, 2 * x)
     access: &Access,
-    // i32, width of input image
     width: LLVMValueRef,
-    // i32, height of input image
     height: LLVMValueRef,
     symbols: &mut SymbolTable
-    // return value has type i32
 ) -> LLVMValueRef {
     let input  = symbols.get(&access.source);
     let x = symbols.get("x");
     let y = symbols.get("y");
     let log_read = symbols.get("log_read");
+    let source = symbols.get(&access.source);
     let (x, y) = (
         lower_var_expr(builder, &access.x, x, y),
         lower_var_expr(builder, &access.y, x, y)
@@ -72,7 +68,7 @@ pub fn lower_access(
             let val = builder.load(ptr, 1);
             builder.build_function_call(
                 log_read,
-                &mut[builder.const_null(builder.type_i8_ptr()), x, y]);
+                &mut[source, x, y]);
             let ext = builder.zext(val, builder.type_i32());
             builder.store(ext, result, 4);
         },
@@ -84,15 +80,14 @@ pub fn lower_access(
     builder.load(result, 4)
 }
 
+/// Return value has type i32
 pub fn lower_definition(
     builder: &Builder,
     llvm_func: LLVMValueRef,
-    // e.g. in(x, y) + in(x, y - 1)
     definition: &Definition,
     width: LLVMValueRef,
     height: LLVMValueRef,
     symbols: &mut SymbolTable
-    // return value has type i32
 ) -> LLVMValueRef {
     let mut recurse = |v| lower_definition(builder, llvm_func, v, width, height, symbols);
     match definition {
@@ -105,15 +100,14 @@ pub fn lower_definition(
     }
 }
 
+/// width and height are of type i32. symbols must contain entries for
+/// all mentioned images and variables.
 pub fn lower_func(
     builder: &Builder,
     llvm_func: LLVMValueRef,
     func: &Func,
-    // i32, width of input image
     width: LLVMValueRef,
-    // i32, height of input image
     height: LLVMValueRef,
-    // must contain symbols for all mentioned images and variables
     symbols: &mut SymbolTable
 ) {
     let val = lower_definition(builder, llvm_func, &func.definition, width, height, symbols);
@@ -122,9 +116,10 @@ pub fn lower_func(
     let ptr = builder.in_bounds_gep(symbols.get(&func.name), offset);
     let trunc = builder.trunc(val, builder.type_i8());
     let log_write = symbols.get("log_write");
+    let name = symbols.get(&func.name);
     builder.build_function_call(
         log_write,
-        &mut[builder.const_null(builder.type_i8_ptr()), x, y]);
+        &mut[name, x, y]);
     builder.store(trunc, ptr, 1);
 }
 
@@ -158,21 +153,22 @@ impl SymbolTable {
 }
 
 #[no_mangle]
-extern "C" fn log_read(_name: *const c_char, x: u32, y: u32) {
-    // TODO: actually pass the buffer names here
-    println!("READ({}, {}, {})", "TODO", x, y);
+extern "C" fn log_read(name: *const c_char, x: u32, y: u32) {
+    let name = unsafe { CStr::from_ptr(name).to_string_lossy().to_string() };
+    println!("READ({}, {}, {})", name, x, y);
 }
 
 #[no_mangle]
-extern "C" fn log_write(_name: *const c_char, x: u32, y: u32) {
-    // TODO: actually pass the buffer names here
-    println!("WRITE({}, {}, {})", "TODO", x, y);
+extern "C" fn log_write(name: *const c_char, x: u32, y: u32) {
+    let name = unsafe { CStr::from_ptr(name).to_string_lossy().to_string() };
+    println!("WRITE({}, {}, {})", name, x, y);
 }
 
 pub fn create_ir_module(context: &Context, graph: &Graph) -> Module {
     assert!(graph.funcs().len() > 0);
     let module = context.new_module(&graph.name);
     let builder = Builder::new(context);
+
     let mut symbols = SymbolTable::new();
 
     let log_funcs_type = builder.func_type(
@@ -211,6 +207,11 @@ pub fn create_ir_module(context: &Context, graph: &Graph) -> Module {
     let entry = builder.new_block(llvm_func, "entry");
     builder.position_at_end(entry);
 
+    for name in &buffer_names {
+        let global = builder.global_string(name, name);
+        symbols.add(name, global);
+    }
+
     builder.build_function_call(
         log_read,
         &mut[builder.const_i32(20), builder.const_i32(30)]
@@ -237,10 +238,11 @@ pub fn create_ir_module(context: &Context, graph: &Graph) -> Module {
     Module::new(module)
 }
 
+/// bound is the open upper bound on the loop variable's value
 fn generate_loop<'s>(
     builder: &Builder,
     name: &str,
-    bound: LLVMValueRef, // (open) upper bound on loop variable's value
+    bound: LLVMValueRef,
     llvm_func: LLVMValueRef,
     symbols: &'s mut SymbolTable,
     mut generate_body: impl FnMut(&'s mut SymbolTable)

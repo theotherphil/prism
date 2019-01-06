@@ -1,7 +1,7 @@
 //!
 //! Defines a 3x3 blur using Prism's DSL, compiles to native code, runs
-//! the generated code on an example image, and dumps inputs, outputs and
-//! intermediates to a user-provided directory.
+//! the generated code on an example image, and dumps raw and optimised IR,
+//! and the function's inputs, outputs, and intermediates to a user-provided directory.
 //!
 //! Example command line:
 //!
@@ -35,14 +35,14 @@ fn run(context: &Context, dir: &Path) -> Result<()> {
     let graph = Graph::new("blur3x3", vec![blur_h, blur_v]);
 
     // Generate LLVM IR
-    let module = create_optimised_module(context, &graph);
+    let module = create_optimised_module(context, &graph, dir);
 
     // Generate native code
     let engine = ExecutionEngine::new(module);
     let processor = engine.get_processor(&graph);
 
     // Run the generated code
-    let inputs = [(&input, &example_image(20, 10))];
+    let inputs = [(&input, &example_image(3, 3))];
     let results = processor.process(&inputs);
 
     // Dump the inputs, outputs and intermediates
@@ -61,18 +61,17 @@ fn run(context: &Context, dir: &Path) -> Result<()> {
     Ok(())
 }
 
-fn create_optimised_module(context: &Context, graph: &Graph) -> Module {
+fn create_optimised_module(context: &Context, graph: &Graph, dir: &Path) -> Module {
     let mut module = create_ir_module(context, &graph);
-    println!("Pre-optimise IR");
-    module.dump_to_stdout();
+
+    module.dump_to_file(dir.join(graph.name.clone() + ".original.txt")).unwrap();
     // Without this optimisation step the IR looks sensible, but compilation fails
     // for some examples with:
     //      "Unable to copy EFLAGS physical register!"
     // Searching for this produces a few LLVM bug reports, but it's also very possible
     // that I've messed something up
     optimise(&mut module);
-    println!("Post-optimise IR");
-    module.dump_to_stdout();
+    module.dump_to_file(dir.join(graph.name.clone() + ".optimised.txt")).unwrap();
     module
 }
 
@@ -80,7 +79,8 @@ fn example_image(width: usize, height: usize) -> GrayImage {
     let mut image = GrayImage::new(width, height);
     for y in 0..height {
         for x in 0..width {
-            image.set(x, y, ((x / 5 + y / 5) % 2) as u8 * 200);
+            //image.set(x, y, ((x / 5 + y / 5) % 2) as u8 * 200);
+            image.set(x, y, (x + y) as u8);
         }
     }
     image

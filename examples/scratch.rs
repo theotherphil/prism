@@ -10,6 +10,15 @@
 #![feature(test)]
 extern crate test;
 use test::black_box;
+use libc::c_char;
+use std::ffi::{CStr, CString};
+
+#[inline(never)]
+#[no_mangle]
+pub extern "C" fn log(msg: *const c_char) {
+    let msg = unsafe { CStr::from_ptr(msg).to_string_lossy().to_string() };
+    println!("{}", msg);
+}
 
 #[inline(never)]
 #[no_mangle]
@@ -25,7 +34,9 @@ pub extern "C" fn process(src: *const u8, dst: *mut u8, width: usize, height: us
     }
 }
 
-fn main() {
+#[inline(never)]
+#[no_mangle]
+pub fn call_process() {
     let w = black_box(100usize);
     let h = black_box(100usize);
     let p = black_box(0u8);
@@ -34,4 +45,19 @@ fn main() {
 
     process(src.as_ptr(), dst.as_mut_ptr(), w, h);
     println!("{:?}", dst.iter().take(10).collect::<Vec<_>>());
+}
+
+#[inline(never)]
+#[no_mangle]
+pub fn call_log(msg: &str) {
+    let msg = CString::new(msg).unwrap();
+    log(msg.as_ptr() as *const _);
+}
+
+fn main() {
+    let mut msg = String::new();
+    for _ in 0..10 {
+        msg.push_str("SPAM");
+    }
+    call_log(&msg);
 }

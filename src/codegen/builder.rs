@@ -144,7 +144,7 @@ impl Builder {
         unsafe {
             let value = CString::new(value).unwrap();
             let name = CString::new(name).unwrap();
-            LLVMBuildGlobalString(self.builder, value.as_ptr(), name.as_ptr())
+            LLVMBuildGlobalStringPtr(self.builder, value.as_ptr(), name.as_ptr())
         }
     }
 
