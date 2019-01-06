@@ -4,7 +4,6 @@ extern crate llvm_sys as llvm;
 
 use std::mem;
 use prism::*;
-use prism::codegen::*;
 
 /// Variables can't be reassigned in LLVM IR, so this version allocates the
 /// loop variables in a stack-allocated array and updates them via loads and
@@ -99,7 +98,7 @@ y.after:
 
 fn run_process_image(context: &Context, ir: &str) {
     println!("* Creating module");
-    let mut module = create_module_from_handwritten_ir(context, ir);
+    let mut module = create_module_from_ir_string(context, ir);
 
     println!("* Raw IR");
     module.dump_to_stdout();

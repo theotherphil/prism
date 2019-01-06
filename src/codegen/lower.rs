@@ -1,12 +1,10 @@
 //! Functions for lowering the prism AST to LLVM IR
 
-use llvm::prelude::*;
+use llvm_sys::prelude::*;
 use std::collections::HashMap;
 use libc::c_char;
 use std::ffi::CStr;
-use crate::codegen::builder::*;
-use crate::codegen::compile::*;
-use crate::ast::*;
+use crate::*;
 
 /// x and y are of type i32, return value has type i32
 pub fn lower_var_expr(

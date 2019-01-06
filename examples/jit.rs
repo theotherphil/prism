@@ -9,7 +9,7 @@
 //!
 
 use std::{io::Result, path::{Path, PathBuf}};
-use prism::{*, codegen::*};
+use prism::*;
 use structopt::StructOpt;
 
 #[derive(StructOpt, Debug)]
@@ -39,7 +39,7 @@ fn run(context: &Context, dir: &Path) -> Result<()> {
 
     // Generate native code
     let engine = ExecutionEngine::new(module);
-    let processor = engine.get_processor(&graph);
+    let processor = get_processor(&engine, &graph);
 
     // Run the generated code
     let inputs = [(&input, &example_image(3, 3))];

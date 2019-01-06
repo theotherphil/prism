@@ -1,17 +1,20 @@
 //! A load of utter rubbish to run JIT-ed functions. Will be totally replaced
 //! but for now this lets us experiment with image chains.
 
-use crate::traits::*;
-use crate::buffer::*;
-use crate::ast::*;
 use std::collections::HashMap;
 use std::mem;
+use crate::*;
 
 pub struct Processor {
     // TODO: needs lifetimes - can't use this after the execution engine is dropped
     function_pointer: u64,
     inputs: Vec<String>,
     outputs: Vec<String>
+}
+
+pub fn get_processor(engine: &ExecutionEngine, graph: &Graph) -> Processor {
+    let addr = engine.get_func_addr(&graph.name);
+    Processor::new(graph, addr)
 }
 
 impl Processor {

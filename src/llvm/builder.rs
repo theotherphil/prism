@@ -4,15 +4,17 @@
 //! that we don't need here).
 //! See https://github.com/rust-lang/rust/blob/master/src/librustc_codegen_llvm/builder.rs
 
-use llvm::prelude::*;
-use llvm::core::*;
-use llvm::*;
-use llvm::support::*;
+use llvm_sys::{
+    *,
+    prelude::*,
+    core::*,
+    support::*
+};
 use std::mem;
 use std::ptr;
 use libc::{c_char, c_void};
 use std::ffi::CString;
-use crate::codegen::compile::*;
+use crate::*;
 
 fn noname() -> *const c_char {
     static CNULL: c_char = 0;
