@@ -2,7 +2,7 @@
 use std::fmt;
 use std::ops::{Add, Div, Mul, Sub};
 use std::collections::HashSet;
-use crate::pretty_print::*;
+use crate::syntax::pretty_print::*;
 
 // [NOTE: AST terminology]
 //
@@ -295,6 +295,13 @@ impl PrettyPrint for Func {
     }
 }
 
+/// Shorthand for creating a new `Source`.
+///
+/// The following code samples are equivalent.
+/// 
+/// ```source!(input);```
+///
+/// ```let input = Source::new("input");```
 #[macro_export]
 macro_rules! source {
     ($name:ident) => {
@@ -302,6 +309,13 @@ macro_rules! source {
     }
 }
 
+/// Shorthand for creating a new `Func`.
+///
+/// The following code samples are equivalent.
+/// 
+/// ```func!(g = f.at(x, y));```
+///
+/// ```let g = Func::new("g", f.at(x, y));```
 #[macro_export]
 macro_rules! func {
     ($name:ident = $($rest:tt)*) => {

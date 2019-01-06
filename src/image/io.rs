@@ -1,5 +1,5 @@
 
-use crate::{GrayImage, RgbImage, Image};
+use crate::image::{GrayImage, RgbImage, Image};
 use std::{
     fs::File,
     io::{BufWriter, Result},

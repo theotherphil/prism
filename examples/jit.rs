@@ -9,7 +9,14 @@
 //!
 
 use std::{io::Result, path::{Path, PathBuf}};
-use prism::*;
+use prism::{
+    func,
+    source,
+    syntax::*,
+    codegen::*,
+    image::*,
+    llvm::*
+};
 use structopt::StructOpt;
 
 #[derive(StructOpt, Debug)]

@@ -1,4 +1,4 @@
-//! Some handwritten examples of 3x3 blur functions
+//! Some handwritten examples of 3x3 blur functions.
 
 use crate::image::*;
 

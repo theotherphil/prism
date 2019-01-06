@@ -14,7 +14,7 @@ use std::mem;
 use std::ptr;
 use libc::{c_char, c_void};
 use std::ffi::CString;
-use crate::*;
+use crate::llvm::*;
 
 fn noname() -> *const c_char {
     static CNULL: c_char = 0;

@@ -3,7 +3,7 @@
 
 use std::collections::HashMap;
 use std::mem;
-use crate::*;
+use crate::{image::*, syntax::*, llvm::*};
 
 pub struct Processor<'c> {
     /// This fields exists solely to ensure the engine

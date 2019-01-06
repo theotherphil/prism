@@ -11,7 +11,7 @@ use std::path::PathBuf;
 use std::fs::File;
 use std::io::Write;
 use structopt::StructOpt;
-use prism::*;
+use prism::{image::*, tracing::*, blur3::*};
 
 #[derive(StructOpt, Debug)]
 struct Opts {

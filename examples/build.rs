@@ -3,7 +3,7 @@
 //! $ cargo run --example build
 //!
 
-use prism::*;
+use prism::llvm::*;
 use libc::c_char;
 use std::mem;
 use std::ffi::CStr;

@@ -1,9 +1,11 @@
 //! An image processing example using handwritten IR
 
-extern crate llvm_sys as llvm;
-
 use std::mem;
-use prism::*;
+use prism::{
+    gray_image,
+    llvm::*,
+    image::*
+};
 
 /// Variables can't be reassigned in LLVM IR, so this version allocates the
 /// loop variables in a stack-allocated array and updates them via loads and

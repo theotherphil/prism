@@ -1,4 +1,4 @@
-//! Wrapper types for the LLVM bindings in llvm-sys
+//! Wrapper types for the LLVM bindings in llvm-sys.
 
 pub use self::builder::*;
 pub use self::context::*;

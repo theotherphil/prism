@@ -3,7 +3,7 @@
 use llvm_sys::prelude::*;
 use libc::c_char;
 use std::ffi::CStr;
-use crate::*;
+use crate::{syntax::*, codegen::*, llvm::*};
 
 /// x and y are of type i32, return value has type i32
 pub fn lower_var_expr(

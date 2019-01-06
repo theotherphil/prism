@@ -4,7 +4,7 @@
 extern crate llvm_sys as llvm;
 
 use std::mem;
-use prism::*;
+use prism::llvm::*;
 
 const SUM_IR: &str = "define i64 @sum(i64, i64, i64) {
 entry:
