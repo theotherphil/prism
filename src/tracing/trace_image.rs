@@ -5,11 +5,11 @@ use std::rc::Rc;
 use std::cell::RefCell;
 use crate::image::*;
 
-pub struct Tracer {
+pub struct TraceImageFactory {
     pub trace: Rc<Trace>
 }
 
-impl Factory for Tracer {
+impl Factory for TraceImageFactory {
     type Image = TraceImage;
 
     fn create_image(&mut self, width: usize, height: usize) -> TraceImage {
@@ -17,9 +17,9 @@ impl Factory for Tracer {
     }
 }
 
-impl Tracer {
-    pub fn new() -> Tracer {
-        Tracer {
+impl TraceImageFactory {
+    pub fn new() -> TraceImageFactory {
+        TraceImageFactory {
             trace: Rc::new(Trace::new())
         }
     }

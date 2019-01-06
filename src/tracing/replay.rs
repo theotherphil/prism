@@ -1,6 +1,6 @@
 //! Functions for creating animations visualising traces of image reads and writes
 
-use crate::tracer::*;
+use crate::tracing::*;
 use crate::image::*;
 use std::collections::HashMap;
 

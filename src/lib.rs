@@ -13,8 +13,7 @@ pub use crate::ast::*;
 pub use crate::blur3::*;
 pub use crate::llvm::*;
 pub use crate::pretty_print::*;
-pub use crate::replay::*;
-pub use crate::tracer::*;
+pub use crate::tracing::*;
 
 #[macro_use]
 mod image;
@@ -24,8 +23,7 @@ mod ast;
 mod blur3;
 mod llvm;
 mod pretty_print;
-mod replay;
-mod tracer;
+mod tracing;
 
 
 

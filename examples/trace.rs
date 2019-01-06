@@ -47,9 +47,9 @@ fn gradient_image(width: usize, height: usize) -> GrayImage {
 // Appplies function to input image, creates visualistion from the trace, writes replay
 // to disk and returns the path to this file
 fn visualise<F>(dir: &PathBuf, name: &str, image: &GrayImage, f: F, delay_in_ms: u16) -> std::io::Result<PathBuf>
-where F: Fn(&mut Tracer, &TraceImage) -> TraceImage
+where F: Fn(&mut TraceImageFactory, &TraceImage) -> TraceImage
 {
-    let mut t = Tracer::new();
+    let mut t = TraceImageFactory::new();
     let image = t.create_from_image(&image);
     let _ = f(&mut t, &image);
 
