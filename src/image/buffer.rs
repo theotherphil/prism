@@ -1,6 +1,6 @@
 
 use std::fmt;
-use crate::traits::*;
+use crate::image::*;
 
 /// Trivial factory that just calls GrayImage::new
 pub struct BufferFactory {}

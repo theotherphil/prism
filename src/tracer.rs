@@ -3,8 +3,7 @@
 
 use std::rc::Rc;
 use std::cell::RefCell;
-use crate::traits::*;
-use crate::buffer::*;
+use crate::image::*;
 
 pub struct Tracer {
     pub trace: Rc<Trace>

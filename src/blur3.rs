@@ -1,6 +1,6 @@
 //! Some handwritten examples of 3x3 blur functions
 
-use crate::traits::*;
+use crate::image::*;
 
 // Running example: 3x3 box filter
 
@@ -189,7 +189,6 @@ fn blur3_tiled_body<I: Image<u8>>(image: &I, tile: &mut I, result: &mut I, tile_
 mod tests {
     use super::*;
     use ::test::*;
-    use crate::buffer::*;
 
     fn image(width: usize, height: usize) -> GrayImage {
         let mut i = GrayImage::new(width, height);

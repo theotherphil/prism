@@ -1,9 +1,7 @@
 //! Functions for creating animations visualising traces of image reads and writes
 
-use crate::buffer::*;
-use crate::traits::*;
 use crate::tracer::*;
-use crate::io::*;
+use crate::image::*;
 use std::collections::HashMap;
 
 pub fn upscale<T: Copy + Zero>(image: &ImageBuffer<T>, factor: u8) -> ImageBuffer<T> {
