@@ -1,11 +1,10 @@
-
-// Used to generate IR for basic functions to nick for use in handwritten/generated IR
-// Without the cargo incremental flag the following warning is produced:
-//  warning: ignoring emit path because multiple .ll files were produced
-//
-// CARGO_INCREMENTAL=0 RUSTFLAGS="--emit=llvm-ir" cargo run --release --example scratch
-//
-// Check target/release/examples/scratch_*.ll to see the generated IR
+//! Used to generate IR for basic functions to nick for use in handwritten/generated IR
+//! Without the cargo incremental flag the following warning is produced:
+//!  warning: ignoring emit path because multiple .ll files were produced
+//!
+//! CARGO_INCREMENTAL=0 RUSTFLAGS="--emit=llvm-ir" cargo run --release --example scratch
+//!
+//! Check target/release/examples/scratch_*.ll to see the generated IR
 
 #![feature(test)]
 extern crate test;

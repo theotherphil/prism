@@ -212,15 +212,6 @@ pub fn create_ir_module(context: &Context, graph: &Graph) -> Module {
         symbols.add(name, global);
     }
 
-    builder.build_function_call(
-        log_read,
-        &mut[builder.const_i32(20), builder.const_i32(30)]
-    );
-    builder.build_function_call(
-        log_write,
-        &mut[builder.const_i32(50), builder.const_i32(30)]
-    );
-
     let y_max = builder.trunc(height, builder.type_i32());
     let x_max = builder.trunc(width, builder.type_i32());
 
