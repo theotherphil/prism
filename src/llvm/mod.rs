@@ -24,7 +24,7 @@ pub fn initialise_llvm_jit() {
 }
 
 /// Parse a string containing a textual representation of an IR module into an in-memory module.
-pub fn create_module_from_ir_string(context: &Context, ir: &str) -> Module {
+pub fn create_module_from_ir_string<'c, 'i>(context: &'c Context, ir: &'i str) -> Module<'c> {
     use std::{ffi::CString, mem};
     use llvm_sys::{
         core::LLVMCreateMemoryBufferWithMemoryRange,
@@ -46,11 +46,11 @@ pub fn create_module_from_ir_string(context: &Context, ir: &str) -> Module {
             panic!("IR parsing failed: {:?}", message_str);
         }
 
-        Module::new(module)
+        context.wrap_llvm_module(module)
     }
 }
 
-pub fn optimise(module: &mut Module) {
+pub fn optimise(module: &mut Module<'_>) {
     use llvm_sys::{core::*, transforms::pass_manager_builder::*};
 
     unsafe {

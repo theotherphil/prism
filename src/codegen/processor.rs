@@ -5,23 +5,30 @@ use std::collections::HashMap;
 use std::mem;
 use crate::*;
 
-pub struct Processor {
-    // TODO: needs lifetimes - can't use this after the execution engine is dropped
+pub struct Processor<'c> {
+    /// This fields exists solely to ensure the engine
+    /// isn't dropped while we're still using it.
+    /// We could have a reference instead, but then this class
+    /// would have two lifetimes - one for the reference to the
+    /// engine and one for the context.
+    _engine: ExecutionEngine<'c>,
     function_pointer: u64,
     inputs: Vec<String>,
     outputs: Vec<String>
 }
 
-pub fn get_processor(engine: &ExecutionEngine, graph: &Graph) -> Processor {
-    let addr = engine.get_func_addr(&graph.name);
-    Processor::new(graph, addr)
+/// Compile IR and return an object which supports calling the generated function
+pub fn create_processor<'c, 'g>(module: Module<'c>, graph: &'g Graph) -> Processor<'c> {
+    let engine = ExecutionEngine::new(module);
+    Processor::new(engine, &graph)
 }
 
-impl Processor {
-    pub fn new(graph: &Graph, function_pointer: u64) -> Processor {
+impl<'c> Processor<'c> {
+    pub fn new<'d>(engine: ExecutionEngine<'d>, graph: &Graph) -> Processor<'d> {
+        let function_pointer = unsafe { engine.get_func_addr(&graph.name) };
         let inputs = graph.inputs().to_vec();
         let outputs = graph.outputs().to_vec();
-        Processor { function_pointer, inputs, outputs }
+        Processor { _engine: engine, function_pointer, inputs, outputs }
     }
 
     pub fn process(&self, inputs: &[(&Source, &GrayImage)]) -> HashMap<String, GrayImage> {

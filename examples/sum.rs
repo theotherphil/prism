@@ -4,7 +4,6 @@
 extern crate llvm_sys as llvm;
 
 use std::mem;
-use llvm::prelude::*;
 use prism::*;
 
 const SUM_IR: &str = "define i64 @sum(i64, i64, i64) {
@@ -14,12 +13,12 @@ entry:
     ret i64 %sum.2
 }";
 
-fn create_sum_module_via_builder(context: &Context) -> LLVMModuleRef {
+fn create_sum_module_via_builder(context: &Context) -> Module<'_> {
     let module = context.new_module("sum_builder");
     let builder = Builder::new(context);
     let i64t = builder.type_i64();
     let function_type = builder.func_type(i64t, &mut [i64t, i64t, i64t]);
-    let function = builder.add_func(module, "sum", function_type);
+    let function = builder.add_func(&module, "sum", function_type);
     let _ = builder.new_block(function, "entry");
     let params = builder.get_params(function);
     let (x, y, z) = (params[0], params[1], params[2]);
@@ -33,14 +32,14 @@ fn run_sum(context: &Context, codegen: Codegen) {
     println!("*** Running {:?}\n", codegen);
     let module = match codegen {
         Codegen::Handwritten => create_module_from_ir_string(context, SUM_IR),
-        Codegen::Builder => Module::new(create_sum_module_via_builder(context)),
+        Codegen::Builder => create_sum_module_via_builder(context),
     };
     println!("** Module IR:");
     module.dump_to_stdout();
 
     let engine = ExecutionEngine::new(module);
 
-    let addr = engine.get_func_addr("sum");
+    let addr = unsafe { engine.get_func_addr("sum") };
     let f: extern "C" fn(u64, u64, u64) -> u64 = unsafe { mem::transmute(addr) };
     let (x, y, z) = (1, 1, 1);
     let res = f(x, y, z);

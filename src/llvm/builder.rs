@@ -163,13 +163,13 @@ impl Builder {
 
     pub fn add_func(
         &self,
-        module: LLVMModuleRef,
+        module: &Module,
         name: &str,
         func_type: LLVMTypeRef
     ) -> LLVMValueRef {
         unsafe {
             let name = CString::new(name).unwrap();
-            LLVMAddFunction(module, name.as_ptr(), func_type)
+            LLVMAddFunction(module.module, name.as_ptr(), func_type)
         }
     }
 

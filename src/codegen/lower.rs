@@ -137,7 +137,7 @@ fn global_buffer_string_name(name: &str) -> String {
     String::from(name) + "_name"
 }
 
-pub fn create_ir_module(context: &Context, graph: &Graph) -> Module {
+pub fn create_ir_module<'c, 'g>(context: &'c Context, graph: &'g Graph) -> Module<'c> {
     assert!(graph.funcs().len() > 0);
     let module = context.new_module(&graph.name);
     let builder = Builder::new(context);
@@ -150,8 +150,8 @@ pub fn create_ir_module(context: &Context, graph: &Graph) -> Module {
     );
     builder.add_symbol("log_read", log_read as *const());
     builder.add_symbol("log_write", log_write as *const());
-    let log_read = builder.add_func(module, "log_read", log_funcs_type);
-    let log_write = builder.add_func(module, "log_write", log_funcs_type);
+    let log_read = builder.add_func(&module, "log_read", log_funcs_type);
+    let log_write = builder.add_func(&module, "log_write", log_funcs_type);
     symbols.add("log_read", log_read);
     symbols.add("log_write", log_write);
 
@@ -166,7 +166,7 @@ pub fn create_ir_module(context: &Context, graph: &Graph) -> Module {
         llvm_func_params.push(builder.type_i64());
     }
     let llvm_func_type = builder.func_type(builder.type_void(), &mut llvm_func_params);
-    let llvm_func = builder.add_func(module, &graph.name, llvm_func_type);
+    let llvm_func = builder.add_func(&module, &graph.name, llvm_func_type);
     let params = builder.get_params(llvm_func);
 
     for (i, b) in buffer_names.iter().enumerate() {
@@ -199,7 +199,7 @@ pub fn create_ir_module(context: &Context, graph: &Graph) -> Module {
     }
 
     builder.ret_void();
-    Module::new(module)
+    module
 }
 
 /// bound is the open upper bound on the loop variable's value

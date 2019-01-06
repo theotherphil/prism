@@ -21,12 +21,11 @@ struct Opts {
 
 fn main() -> Result<()> {
     initialise_llvm_jit();
-    let context = Context::new();
     let opts = Opts::from_args();
-    run(&context, &opts.output_dir)
+    run(&opts.output_dir)
 }
 
-fn run(context: &Context, dir: &Path) -> Result<()> {
+fn run(dir: &Path) -> Result<()> {
     // Define the pipeline
     let (x, y) = (Var::X, Var::Y);
     source!(input);
@@ -35,11 +34,11 @@ fn run(context: &Context, dir: &Path) -> Result<()> {
     let graph = Graph::new("blur3x3", vec![blur_h, blur_v]);
 
     // Generate LLVM IR
-    let module = create_optimised_module(context, &graph, dir);
+    let context = Context::new();
+    let module = create_optimised_module(&context, &graph, dir);
 
     // Generate native code
-    let engine = ExecutionEngine::new(module);
-    let processor = get_processor(&engine, &graph);
+    let processor = create_processor(module, &graph);
 
     // Run the generated code
     let inputs = [(&input, &example_image(3, 3))];
@@ -61,7 +60,11 @@ fn run(context: &Context, dir: &Path) -> Result<()> {
     Ok(())
 }
 
-fn create_optimised_module(context: &Context, graph: &Graph, dir: &Path) -> Module {
+fn create_optimised_module<'c, 'g, 'p>(
+    context: &'c Context,
+    graph: &'g Graph,
+    dir: &'p Path
+) -> Module<'c> {
     let mut module = create_ir_module(context, &graph);
 
     module.dump_to_file(dir.join(graph.name.clone() + ".original.txt")).unwrap();

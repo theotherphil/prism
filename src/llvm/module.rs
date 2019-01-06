@@ -4,19 +4,18 @@ use std::{
     ffi::CStr,
     fs::File,
     io::Write,
+    marker::PhantomData,
     path::Path
 };
 use llvm_sys::{core::*, prelude::*};
 
-pub struct Module {
-    pub module: LLVMModuleRef
+pub struct Module<'c> {
+    pub module: LLVMModuleRef,
+    // This module must not outlive the context that created it.
+    pub(in crate::llvm) context: PhantomData<&'c crate::llvm::Context>
 }
 
-impl Module {
-    pub fn new(module: LLVMModuleRef) -> Module {
-        Module { module }
-    }
-
+impl<'c> Module<'c> {
     pub fn dump_to_stdout(&self) {
         unsafe {
             LLVMDumpModule(self.module);

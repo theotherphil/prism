@@ -22,7 +22,7 @@ extern "C" fn log(name: *const c_char) {
 fn run(context: &Context) {
     // Create module
     let module_name = "call_log";
-    let module = context.new_module(&module_name);
+    let mut module = context.new_module(&module_name);
 
     let builder = Builder::new(context);
 
@@ -32,14 +32,14 @@ fn run(context: &Context) {
         builder.type_void(),
         &mut [builder.type_i8_ptr()]
     );
-    let log = builder.add_func(module, "log", log_func_type);
+    let log = builder.add_func(&module, "log", log_func_type);
 
     // Create call_log function
     let call_func_type = builder.func_type(
         builder.type_void(),
         &mut[]
     );
-    let call_func = builder.add_func(module, "call_log", call_func_type);
+    let call_func = builder.add_func(&module, "call_log", call_func_type);
 
     // Declare msg global and generate call to the log function
     let entry = builder.new_block(call_func, "entry");
@@ -49,7 +49,6 @@ fn run(context: &Context) {
     builder.ret_void();
 
     // Dump generated IR
-    let mut module = Module::new(module);
     println!("{}", module.dump_to_string());
     optimise(&mut module);
     println!("{}", module.dump_to_string());
