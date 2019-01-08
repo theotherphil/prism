@@ -43,7 +43,7 @@ pub extern "C" fn log_write(name: *const c_char, x: u32, y: u32, c: u8) {
     unsafe {
         let name = CStr::from_ptr(name).to_string_lossy().to_string();
         if let (Some(tr), Some(ids)) = (&TRACE, &TRACE_IDS) {
-                tr.trace_set(ids[&name], x as usize, y as usize, c);
+            tr.trace_set(ids[&name], x as usize, y as usize, c);
         }
     }
 }

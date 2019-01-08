@@ -3,8 +3,10 @@
 
 pub use self::global_trace::*;
 pub use self::replay::*;
+pub use self::trace::*;
 pub use self::trace_image::*;
 
 mod global_trace;
 mod replay;
+mod trace;
 mod trace_image;

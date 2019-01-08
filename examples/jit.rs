@@ -8,7 +8,11 @@
 //! $ cargo run --example jit -- -o /some/directory
 //!
 
-use std::{io::Result, path::{Path, PathBuf}};
+use std::{
+    fs::File,
+    io::{Result, Write},
+    path::{Path, PathBuf}
+};
 use prism::{
     func,
     source,
@@ -65,7 +69,12 @@ fn run(dir: &Path) -> Result<()> {
         save_to_png(&result.1, dir.join(&(result.0.clone() + ".png")))?;
     }
 
-    // Create replay visualisation of all reads and writes
+    // Dump a text trace of all the reads and writes...
+    let mut f = File::create(dir.join("replay.txt"))?;
+    for action in trace.actions.borrow().iter() {
+        writeln!(f, "{:?}", action)?;
+    }
+    // ... and an animated gif showing them.
     write_replay_animation(dir.join("replay.gif"), &trace, 60)?;
 
     Ok(())
