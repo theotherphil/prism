@@ -10,7 +10,7 @@
 
 use std::{
     collections::HashMap,
-    fs::File,
+    fs::{create_dir_all, File},
     io::{Result, Write},
     path::{Path, PathBuf}
 };
@@ -40,76 +40,62 @@ fn main() -> Result<()> {
     run_brighten(&opts.output_dir)
 }
 
-fn run_blur(dir: &Path) -> Result<()> {
-    // Define the pipeline
+fn run_blur(base_dir: &Path) -> Result<()> {
     let (x, y) = (Var::X, Var::Y);
     source!(input);
     func!(blur_h = (input.at(x - 1, y) + input.at(x, y) + input.at(x + 1, y)) / 3);
     func!(blur_v = (blur_h.at(x, y - 1) + blur_h.at(x, y) + blur_h.at(x, y + 1)) / 3);
     let graph = Graph::new("blur3x3", vec![blur_h, blur_v]);
 
-    // Generate LLVM IR
-    let context = Context::new();
-    let module = create_optimised_module(&context, &graph, dir);
-
-    // Generate native code
-    let processor = create_processor(module, &graph);
-
-    // Run the generated code
-    let inputs = [(&input, &example_image(6, 6))];
-    let params = HashMap::new();
-    let (results, trace) = processor.process_with_tracing(&inputs, &params);
-
-    // Dump the inputs, outputs and intermediates
-    for func in graph.funcs() {
-        println!("{}", func.pretty_print());
-    }
-    for input in &inputs {
-        println!("{:?}", input);
-        save_to_png(&input.1, dir.join(&(input.0.name.clone() + ".png")))?;
-    }
-    for result in &results {
-        println!("{}: {:?}", result.0, result.1);
-        save_to_png(&result.1, dir.join(&(result.0.clone() + ".png")))?;
-    }
-
-    // Dump a text trace of all the reads and writes...
-    let mut f = File::create(dir.join("replay.txt"))?;
-    for action in trace.actions.borrow().iter() {
-        writeln!(f, "{:?}", action)?;
-    }
-    // ... and an animated gif showing them.
-    write_replay_animation(dir.join("replay.gif"), &trace, 60)?;
-
-    Ok(())
+    compile_and_run(
+        base_dir,
+        &graph,
+        &[(&input, &example_image(6, 6))],
+        &HashMap::new())
 }
 
-fn run_brighten(dir: &Path) -> Result<()> {
-    // Define the pipeline
+fn run_brighten(base_dir: &Path) -> Result<()> {
     let (x, y) = (Var::X, Var::Y);
     source!(input);
     param!(p);
     func!(bright = input.at(x, y) + &p);
     let graph = Graph::new("brighten", vec![bright]);
 
+    let mut params = HashMap::new();
+    params.insert(p, 50);
+
+    compile_and_run(
+        base_dir,
+        &graph,
+        &[(&input, &example_image(6, 6))],
+        &params)
+}
+
+fn compile_and_run(
+    base_dir: &Path,
+    graph: &Graph,
+    inputs: &[(&Source, &GrayImage)],
+    params: &HashMap<Param, i32>
+) -> Result<()> {
+    // Images and IR will be written to base_dir/<graph_name>
+    let dir = base_dir.join(&graph.name);
+    create_dir_all(&dir)?;
+
     // Generate LLVM IR
     let context = Context::new();
-    let module = create_optimised_module(&context, &graph, dir);
+    let module = create_optimised_module(&context, &graph, &dir);
 
     // Generate native code
     let processor = create_processor(module, &graph);
 
     // Run the generated code
-    let inputs = [(&input, &example_image(6, 6))];
-    let mut params = HashMap::new();
-    params.insert(p, 50);
-    let (results, trace) = processor.process_with_tracing(&inputs, &params);
+    let (results, trace) = processor.process_with_tracing(inputs, params);
 
     // Dump the inputs, outputs and intermediates
     for func in graph.funcs() {
         println!("{}", func.pretty_print());
     }
-    for input in &inputs {
+    for input in inputs {
         println!("{:?}", input);
         save_to_png(&input.1, dir.join(&(input.0.name.clone() + ".png")))?;
     }
