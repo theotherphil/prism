@@ -89,6 +89,33 @@ pub fn lower_definition(
         Definition::Access(a) => lower_access(builder, llvm_func, a, width, height, symbols),
         Definition::Const(c) => builder.const_i32(*c),
         Definition::Param(p) => symbols.get(&p),
+        Definition::Cond(c) => {
+            let left = recurse(&*c.lhs);
+            let right = recurse(&*c.rhs);
+            let if_true = recurse(&*c.if_true);
+            let if_false = recurse(&*c.if_false);
+            let result = builder.alloca(builder.type_i32(), 4);
+            generate_if_then_else(
+                builder,
+                llvm_func,
+                symbols,
+                // if
+                |_| {
+                    match c.cmp {
+                        Comparison::EQ => builder.icmp_eq(left, right),
+                        Comparison::GT => builder.icmp_sgt(left, right),
+                        Comparison::GTE => builder.icmp_sge(left, right),
+                        Comparison::LT => builder.icmp_slt(left, right),
+                        Comparison::LTE => builder.icmp_sle(left, right)
+                    }
+                },
+                // then
+                |_| { builder.store(if_true, result, 4); },
+                // else
+                |_| { builder.store(if_false, result, 4); });
+
+            builder.load(result, 4)
+        }
         Definition::Add(l, r) => builder.add(recurse(l), recurse(r)),
         Definition::Mul(l, r) => builder.mul(recurse(l), recurse(r)),
         Definition::Sub(l, r) => builder.sub(recurse(l), recurse(r)),

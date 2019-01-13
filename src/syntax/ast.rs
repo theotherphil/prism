@@ -99,6 +99,46 @@ impl PrettyPrint for Access {
     }
 }
 
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+pub enum Comparison {
+    /// Left equal to right.
+    EQ,
+    /// Left strictly greater than right.
+    GT,
+    /// Left greater than or equal to right.
+    GTE,
+    /// Left strictly less than right.
+    LT,
+    /// Left less than or equal to right.
+    LTE
+}
+
+impl PrettyPrint for Comparison {
+    fn pretty_print(&self) -> String {
+        let s = match *self {
+            Comparison::EQ => "==",
+            Comparison::GT => ">",
+            Comparison::GTE => ">=",
+            Comparison::LT => "<",
+            Comparison::LTE => "<="
+        };
+        String::from(s)
+    }
+
+    fn is_leaf(&self) -> bool {
+        true
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct Condition {
+    pub cmp: Comparison,
+    pub lhs: Box<Definition>,
+    pub rhs: Box<Definition>,
+    pub if_true: Box<Definition>,
+    pub if_false: Box<Definition>
+}
+
 /// An expression defining the value to set an image pixel to
 #[derive(Debug, Clone)]
 pub enum Definition {
@@ -106,6 +146,7 @@ pub enum Definition {
     // All intermediate calculations happen at type i32 for now
     Const(i32),
     Param(String),
+    Cond(Condition),
     // TODO: share code for printing and lowering arithmetic expressions
     // TODO: between VarExpr and Definition
     Add(Box<Definition>, Box<Definition>),
@@ -114,16 +155,33 @@ pub enum Definition {
     Div(Box<Definition>, Box<Definition>)
 }
 
+fn sources(definitions: &[&Box<Definition>]) -> Vec<String> {
+    let mut sources = vec![];
+    for definition in definitions {
+        sources.extend(definition.sources().into_iter());
+    }
+    sources
+}
+
+fn params(definitions: &[&Box<Definition>]) -> Vec<String> {
+    let mut params = vec![];
+    for definition in definitions {
+        params.extend(definition.params().into_iter());
+    }
+    params
+}
+
 impl Definition {
     pub(crate) fn sources(&self) -> Vec<String> {
         match self {
             Definition::Access(a) => vec![a.source.clone()],
             Definition::Const(_) => vec![],
             Definition::Param(_) => vec![],
-            Definition::Add(l, r) => l.sources().into_iter().chain(r.sources()).collect(),
-            Definition::Mul(l, r) => l.sources().into_iter().chain(r.sources()).collect(),
-            Definition::Sub(l, r) => l.sources().into_iter().chain(r.sources()).collect(),
-            Definition::Div(l, r) => l.sources().into_iter().chain(r.sources()).collect(),
+            Definition::Cond(c) => sources(&vec![&c.lhs, &c.rhs, &c.if_true, &c.if_false]),
+            Definition::Add(l, r) => sources(&vec![l, r]),
+            Definition::Mul(l, r) => sources(&vec![l, r]),
+            Definition::Sub(l, r) => sources(&vec![l, r]),
+            Definition::Div(l, r) => sources(&vec![l, r]),
         }
     }
 
@@ -132,10 +190,11 @@ impl Definition {
             Definition::Access(_) => vec![],
             Definition::Const(_) => vec![],
             Definition::Param(p) => vec![p.clone()],
-            Definition::Add(l, r) => l.params().into_iter().chain(r.params()).collect(),
-            Definition::Mul(l, r) => l.params().into_iter().chain(r.params()).collect(),
-            Definition::Sub(l, r) => l.params().into_iter().chain(r.params()).collect(),
-            Definition::Div(l, r) => l.params().into_iter().chain(r.params()).collect(),
+            Definition::Cond(c) => params(&vec![&c.lhs, &c.rhs, &c.if_true, &c.if_false]),
+            Definition::Add(l, r) => params(&vec![l, r]),
+            Definition::Mul(l, r) => params(&vec![l, r]),
+            Definition::Sub(l, r) => params(&vec![l, r]),
+            Definition::Div(l, r) => params(&vec![l, r]),
         }
     }
 }
@@ -146,6 +205,14 @@ impl PrettyPrint for Definition {
             Definition::Access(a) => a.pretty_print(),
             Definition::Const(c) => c.to_string(),
             Definition::Param(p) => p.clone(),
+            Definition::Cond(c) => {
+                let l = pretty_print_with_parens(&*c.lhs);
+                let op = pretty_print_with_parens(&c.cmp);
+                let r = pretty_print_with_parens(&*c.rhs);
+                let t = pretty_print_with_parens(&*c.if_true);
+                let f = pretty_print_with_parens(&*c.if_false);
+                format!("if {} {} {} {{{}}} else {{{}}}", l, op, r, t, f)
+            },
             Definition::Add(l, r) => combine_with_op("+", l, r),
             Definition::Sub(l, r) => combine_with_op("-", l, r),
             Definition::Mul(l, r) => combine_with_op("*", l, r),

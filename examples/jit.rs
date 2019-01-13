@@ -37,7 +37,8 @@ fn main() -> Result<()> {
     initialise_llvm_jit();
     let opts = Opts::from_args();
     run_blur(&opts.output_dir)?;
-    run_brighten(&opts.output_dir)
+    run_brighten(&opts.output_dir)?;
+    run_threshold(&opts.output_dir)
 }
 
 fn run_blur(base_dir: &Path) -> Result<()> {
@@ -69,6 +70,33 @@ fn run_brighten(base_dir: &Path) -> Result<()> {
         &graph,
         &[(&input, &example_image(6, 6))],
         &params)
+}
+
+fn run_threshold(base_dir: &Path) -> Result<()> {
+    let (x, y) = (Var::X, Var::Y);
+    source!(input);
+    use prism::syntax::*;
+
+    // if input(x, y) > 100 { 250 } else { 0 }
+    // no syntactic sugar exists for this yet
+    let r = input.at(x, y);
+    let cond = Definition::Cond(
+        Condition {
+            cmp: Comparison::GT,
+            lhs: Box::new(r),
+            rhs: Box::new(Definition::Const(100)),
+            if_true: Box::new(Definition::Const(250)),
+            if_false: Box::new(Definition::Const(0))
+        }
+    );
+    func!(thresh = cond);
+    let graph = Graph::new("threshold", vec![thresh]);
+
+    compile_and_run(
+        base_dir,
+        &graph,
+        &[(&input, &example_image(6, 6))],
+        &HashMap::new())
 }
 
 fn compile_and_run(
