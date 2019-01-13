@@ -52,6 +52,10 @@ impl Graph {
         &self.outputs
     }
 
+    pub fn input_then_outputs(&self) -> Vec<String> {
+        self.inputs().iter().chain(self.outputs()).cloned().collect()
+    }
+
     pub fn params(&self) -> &[String] {
         &self.params
     }

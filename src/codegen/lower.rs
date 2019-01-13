@@ -124,14 +124,22 @@ fn global_buffer_string_name(name: &str) -> String {
     String::from(name) + "_name"
 }
 
-pub fn create_ir_module<'c, 'g>(context: &'c Context, graph: &'g Graph) -> Module<'c> {
-    assert!(graph.funcs().len() > 0);
-    let module = context.new_module(&graph.name);
-    let builder = Builder::new(context);
+/// Creates the type of the generated function and adds it to `module`.
+fn construct_func(builder: &Builder, module: &Module<'_>, graph: &Graph) -> LLVMValueRef {
+    let mut llvm_func_params = vec![];
+    for _ in graph.input_then_outputs().iter() {
+        llvm_func_params.push(builder.type_i8_ptr());
+        llvm_func_params.push(builder.type_i64());
+        llvm_func_params.push(builder.type_i64());
+    }
+    // TODO: total hack that assumes there's always exactly one i32 parameter.
+    // TODO: fix buffer and param passing to provide arrays.
+    llvm_func_params.push(builder.type_i32());
+    let llvm_func_type = builder.func_type(builder.type_void(), &mut llvm_func_params);
+    builder.add_func(&module, &graph.name, llvm_func_type)
+}
 
-    let mut symbols = SymbolTable::new();
-
-    // Register tracing functions
+fn register_trace_functions(builder: &Builder, module: &Module<'_>) -> (LLVMValueRef, LLVMValueRef) {
     let log_read_type = builder.func_type(
         builder.type_void(),
         &mut [builder.type_i8_ptr(), builder.type_i32(), builder.type_i32()]
@@ -144,31 +152,27 @@ pub fn create_ir_module<'c, 'g>(context: &'c Context, graph: &'g Graph) -> Modul
     builder.add_symbol("log_write", log_write as *const());
     let log_read = builder.add_func(&module, "log_read", log_read_type);
     let log_write = builder.add_func(&module, "log_write", log_write_type);
-    symbols.add("log_read", log_read);
-    symbols.add("log_write", log_write);
+    (log_read, log_write)
+}
 
-    let buffer_names = graph.inputs().iter()
-        .chain(graph.outputs())
-        .collect::<Vec<_>>();
+pub fn create_ir_module<'c, 'g>(context: &'c Context, graph: &'g Graph) -> Module<'c> {
+    assert!(graph.funcs().len() > 0);
 
-    // Construct signature of generated function
-    let mut llvm_func_params = vec![];
-    for _ in &buffer_names {
-        llvm_func_params.push(builder.type_i8_ptr());
-        llvm_func_params.push(builder.type_i64());
-        llvm_func_params.push(builder.type_i64());
-    }
-    // TODO: total hack that assumes there's always exactly one i32 parameter.
-    // TODO: fix buffer and param passing to provide arrays.
-    llvm_func_params.push(builder.type_i32());
-    let llvm_func_type = builder.func_type(builder.type_void(), &mut llvm_func_params);
-    let llvm_func = builder.add_func(&module, &graph.name, llvm_func_type);
+    let module = context.new_module(&graph.name);
+    let builder = Builder::new(context);
+    let mut symbols = SymbolTable::new();
+
+    let (log_read, log_write) = register_trace_functions(&builder, &module);
+    let llvm_func = construct_func(&builder, &module, &graph);
     let params = builder.get_params(llvm_func);
 
+    // Populate symbol table
+    symbols.add("log_read", log_read);
+    symbols.add("log_write", log_write);
+    let buffer_names = graph.input_then_outputs();
     for (i, b) in buffer_names.iter().enumerate() {
         symbols.add(b, params[3 * i]);
     }
-
     // TODO: remove this hackery
     assert!(graph.params().len() == 1);
     for (i, p) in graph.params().iter().enumerate() {
