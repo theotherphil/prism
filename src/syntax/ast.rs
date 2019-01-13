@@ -139,6 +139,24 @@ pub struct Condition {
     pub if_false: Box<Definition>
 }
 
+impl Condition {
+    pub fn new(
+        cmp: Comparison,
+        lhs: Definition,
+        rhs: Definition,
+        if_true: Definition,
+        if_false: Definition
+    ) -> Condition {
+        Condition {
+            cmp,
+            lhs: Box::new(lhs),
+            rhs: Box::new(rhs),
+            if_true: Box::new(if_true),
+            if_false: Box::new(if_false)
+        }
+    }
+}
+
 /// An expression defining the value to set an image pixel to
 #[derive(Debug, Clone)]
 pub enum Definition {

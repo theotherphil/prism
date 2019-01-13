@@ -81,13 +81,13 @@ fn run_threshold(base_dir: &Path) -> Result<()> {
     // no syntactic sugar exists for this yet
     let r = input.at(x, y);
     let cond = Definition::Cond(
-        Condition {
-            cmp: Comparison::GT,
-            lhs: Box::new(r),
-            rhs: Box::new(Definition::Const(100)),
-            if_true: Box::new(Definition::Const(250)),
-            if_false: Box::new(Definition::Const(0))
-        }
+        Condition::new(
+            Comparison::GT,
+            r,
+            Definition::Const(100),
+            Definition::Const(250),
+            Definition::Const(0)
+        )
     );
     func!(thresh = cond);
     let graph = Graph::new("threshold", vec![thresh]);
