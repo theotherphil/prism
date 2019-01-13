@@ -148,6 +148,10 @@ impl Builder {
         unsafe { LLVMPointerType(self.type_i8(), 0) }
     }
 
+    pub fn ptr_type(&self, ty: LLVMTypeRef) -> LLVMTypeRef {
+        unsafe { LLVMPointerType(ty, 0) }
+    }
+
     pub fn func_type(&self, ret: LLVMTypeRef, args: &mut [LLVMTypeRef]) -> LLVMTypeRef {
         unsafe {
             const IS_VAR_ARG: LLVMBool = 0;

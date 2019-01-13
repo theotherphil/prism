@@ -8,8 +8,6 @@
 //! $ cargo run --example jit -- -o /some/directory
 //!
 
-#![allow(dead_code)]
-
 use std::{
     collections::HashMap,
     fs::File,
@@ -38,7 +36,7 @@ struct Opts {
 fn main() -> Result<()> {
     initialise_llvm_jit();
     let opts = Opts::from_args();
-    //run_blur(&opts.output_dir)
+    run_blur(&opts.output_dir)?;
     run_brighten(&opts.output_dir)
 }
 

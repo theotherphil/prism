@@ -124,21 +124,7 @@ fn global_buffer_string_name(name: &str) -> String {
     String::from(name) + "_name"
 }
 
-/// Creates the type of the generated function and adds it to `module`.
-fn construct_func(builder: &Builder, module: &Module<'_>, graph: &Graph) -> LLVMValueRef {
-    let mut llvm_func_params = vec![];
-    for _ in graph.input_then_outputs().iter() {
-        llvm_func_params.push(builder.type_i8_ptr());
-        llvm_func_params.push(builder.type_i64());
-        llvm_func_params.push(builder.type_i64());
-    }
-    // TODO: total hack that assumes there's always exactly one i32 parameter.
-    // TODO: fix buffer and param passing to provide arrays.
-    llvm_func_params.push(builder.type_i32());
-    let llvm_func_type = builder.func_type(builder.type_void(), &mut llvm_func_params);
-    builder.add_func(&module, &graph.name, llvm_func_type)
-}
-
+/// Add symbols for the static log_read and log_write functions and add these functions to `module`.
 fn register_trace_functions(builder: &Builder, module: &Module<'_>) -> (LLVMValueRef, LLVMValueRef) {
     let log_read_type = builder.func_type(
         builder.type_void(),
@@ -155,6 +141,55 @@ fn register_trace_functions(builder: &Builder, module: &Module<'_>) -> (LLVMValu
     (log_read, log_write)
 }
 
+/// Creates the type of the generated function and adds it to `module`.
+fn construct_func(builder: &Builder, module: &Module<'_>, graph: &Graph) -> LLVMValueRef {
+    let mut llvm_func_params = vec![
+        builder.ptr_type(builder.type_i8_ptr()), // buffers
+        builder.ptr_type(builder.type_i64()),    // widths
+        builder.ptr_type(builder.type_i64()),    // heights
+        builder.ptr_type(builder.type_i32())     // params
+    ];
+    let llvm_func_type = builder.func_type(builder.type_void(), &mut llvm_func_params);
+    builder.add_func(&module, &graph.name, llvm_func_type)
+}
+
+/// Parameters to the generated image processing function
+struct ProcessingParams {
+    // i8**
+    buffers: LLVMValueRef,
+    // i64*
+    widths: LLVMValueRef,
+    // i64*
+    heights: LLVMValueRef,
+    // i32 *
+    params: LLVMValueRef
+}
+
+impl ProcessingParams {
+    fn new(params: Vec<LLVMValueRef>) -> ProcessingParams {
+        assert_eq!(params.len(), 4);
+        ProcessingParams {
+            buffers: params[0],
+            widths: params[1],
+            heights: params[2],
+            params: params[3]
+        }
+    }
+
+    fn nth_buffer(&self, builder: &Builder, n: usize) -> (LLVMValueRef, LLVMValueRef, LLVMValueRef) {
+        let offset = builder.const_i32(n as i32);
+        let buffer = builder.load(builder.in_bounds_gep(self.buffers, offset), 8);
+        let width = builder.load(builder.in_bounds_gep(self.widths, offset), 8);
+        let height = builder.load(builder.in_bounds_gep(self.heights, offset), 8);
+        (buffer, width, height)
+    }
+
+    fn nth_param(&self, builder: &Builder, n: usize) -> LLVMValueRef {
+        let offset = builder.const_i32(n as i32);
+        builder.load(builder.in_bounds_gep(self.params, offset), 4)
+    }
+}
+
 pub fn create_ir_module<'c, 'g>(context: &'c Context, graph: &'g Graph) -> Module<'c> {
     assert!(graph.funcs().len() > 0);
 
@@ -162,33 +197,35 @@ pub fn create_ir_module<'c, 'g>(context: &'c Context, graph: &'g Graph) -> Modul
     let builder = Builder::new(context);
     let mut symbols = SymbolTable::new();
 
+    // Set up tracing
     let (log_read, log_write) = register_trace_functions(&builder, &module);
-    let llvm_func = construct_func(&builder, &module, &graph);
-    let params = builder.get_params(llvm_func);
-
-    // Populate symbol table
     symbols.add("log_read", log_read);
     symbols.add("log_write", log_write);
-    let buffer_names = graph.input_then_outputs();
-    for (i, b) in buffer_names.iter().enumerate() {
-        symbols.add(b, params[3 * i]);
-    }
-    // TODO: remove this hackery
-    assert!(graph.params().len() == 1);
-    for (i, p) in graph.params().iter().enumerate() {
-        symbols.add(p, params[3 * buffer_names.len() + i]);
-    }
 
-    // We currently assume that all input buffers will have the same dimensions
-    let width = params[1];
-    let height = params[2];
+    // Construct the LLVM object for the generated function
+    let llvm_func = construct_func(&builder, &module, &graph);
+    let params = ProcessingParams::new(builder.get_params(llvm_func));
 
+    // Create first basic block in generated function and start writing to it
     let entry = builder.new_block(llvm_func, "entry");
     builder.position_at_end(entry);
-
-    for name in &buffer_names {
-        let global = builder.global_string(name, name);
-        symbols.add(&global_buffer_string_name(name), global);
+    
+    // Add expressions for each buffer and param to the symbol table.
+    // We currently assume that all buffers have the same dimension, so just
+    // use the dimensions of the last image.
+    let (mut width, mut height) = (builder.const_i32(0), builder.const_i32(0));
+    for (i, b) in graph.input_then_outputs().iter().enumerate() {
+        // Global variable holding the name of this buffer, to use when tracing
+        symbols.add(&global_buffer_string_name(b), builder.global_string(b, b));
+        // Construct expressions for accessing the nth buffer
+        let (buffer, buffer_width, buffer_height) = params.nth_buffer(&builder, i);
+        symbols.add(b, buffer);
+        width = buffer_width;
+        height = buffer_height;
+    }
+    for (i, p) in graph.params().iter().enumerate() {
+        let param = params.nth_param(&builder, i);
+        symbols.add(p, param);
     }
 
     let y_max = builder.trunc(height, builder.type_i32());

@@ -55,10 +55,6 @@ impl<'c> Processor<'c> {
         params: &HashMap<Param, i32>,
         trace: bool
     ) -> (HashMap<String, GrayImage>, Option<Trace>) {
-        // TODO: HACK HACK HACK
-        assert!(params.len() <= 1);
-        let param_value = if params.len() == 0 { 0 } else { *params.iter().nth(0).unwrap().1 };
-
         // Assume that all images are the same size for now. This will not be true in general
         let (w, h) = inputs[0].1.dimensions();
 
@@ -79,6 +75,7 @@ impl<'c> Processor<'c> {
             unsafe { set_global_trace(ids, tr); }
         }
 
+        // Check that all required inputs have been provided
         for source in &self.inputs {
             match inputs.iter().find(|i| &i.0.name == source) {
                 None => panic!(
@@ -89,84 +86,50 @@ impl<'c> Processor<'c> {
             }
         }
 
-        let mut calculated_images: Vec<(String, GrayImage)> = self.outputs
+        // Allocate intermediate and result buffers
+        let calculated_images: Vec<(String, GrayImage)> = self.outputs
             .iter()
             .map(|name| (name.clone(), GrayImage::new(w, h)))
             .collect();
 
-        match (self.inputs.len(), self.outputs.len()) {
-            (1, 1) => {
-                let i0 = &inputs[0].1;
-                let r0 = &mut calculated_images[0].1;
-                let f: extern "C" fn(
-                    *const u8, usize, usize,
-                    *mut u8, usize, usize,
-                    i32
-                ) = unsafe { mem::transmute(self.function_pointer) };
-                f(
-                    i0.buffer.as_ptr(), i0.width, i0.height,
-                    r0.buffer.as_mut_ptr(), r0.width, r0.height,
-                    param_value
-                );
-            },
-            (1, 2) => {
-                let i0 = &inputs[0].1;
-                let (rl, rr) = calculated_images.split_at_mut(1);
-                let r0 = &mut rl[0].1;
-                let r1 = &mut rr[0].1;
-                let f: extern "C" fn(
-                    *const u8, usize, usize,
-                    *mut u8, usize, usize,
-                    *mut u8, usize, usize,
-                    i32
-                ) = unsafe { mem::transmute(self.function_pointer) };
-                f(
-                    i0.buffer.as_ptr(), i0.width, i0.height,
-                    r0.buffer.as_mut_ptr(), r0.width, r0.height,
-                    r1.buffer.as_mut_ptr(), r1.width, r1.height,
-                    param_value
-                );
-            },
-            (2, 1) => {
-                let i0 = &inputs[0].1;
-                let i1 = &inputs[0].1;
-                let r0 = &mut calculated_images[0].1;
-                let f: extern "C" fn(
-                    *const u8, usize, usize,
-                    *const u8, usize, usize,
-                    *mut u8, usize, usize,
-                    i32
-                ) = unsafe { mem::transmute(self.function_pointer) };
-                f(
-                    i0.buffer.as_ptr(), i0.width, i0.height,
-                    i1.buffer.as_ptr(), i1.width, i1.height,
-                    r0.buffer.as_mut_ptr(), r0.width, r0.height,
-                    param_value
-                );
-            },
-            (2, 2) => {
-                let i0 = &inputs[0].1;
-                let i1 = &inputs[0].1;
-                let (rl, rr) = calculated_images.split_at_mut(1);
-                let r0 = &mut rl[0].1;
-                let r1 = &mut rr[0].1;
-                let f: extern "C" fn(
-                    *const u8, usize, usize,
-                    *const u8, usize, usize,
-                    *mut u8, usize, usize,
-                    *mut u8, usize, usize,
-                    i32
-                ) = unsafe { mem::transmute(self.function_pointer) };
-                f(
-                    i0.buffer.as_ptr(), i0.width, i0.height,
-                    i1.buffer.as_ptr(), i1.width, i1.height,
-                    r0.buffer.as_mut_ptr(), r0.width, r0.height,
-                    r1.buffer.as_mut_ptr(), r1.width, r1.height,
-                    param_value
-                );
-            },
-            (_, _) => panic!("Unsupported signature")
-        };
+        let mut buffers = vec![];
+        let mut widths = vec![];
+        let mut heights = vec![];
+
+        for input in inputs {
+            let image = input.1;
+            buffers.push(image.buffer.as_ptr());
+            widths.push(image.width());
+            heights.push(image.height());
+        }
+        for calculated in &calculated_images {
+            let image = &calculated.1;
+            buffers.push(image.buffer.as_ptr());
+            widths.push(image.width());
+            heights.push(image.height());
+        }
+
+        // Sort params by name
+        let mut params: Vec<(Param, i32)> = params.iter().map(|e| (e.0.clone(), *e.1)).collect();
+        params.sort_by_key(|e| e.0.name.clone());
+        let params: Vec<i32> = params.iter().map(|e| e.1).collect();
+
+        // The generated function takes a single array containing all buffers,
+        // both inputs and outputs. We claim all the pointers are const here, but
+        // the output buffers are actually mutable.
+        let f: extern "C" fn(
+            *const *const u8, // buffers
+            *const usize,     // widths
+            *const usize,     // heights
+            *const i32        // params
+        ) = unsafe { mem::transmute(self.function_pointer) };
+
+        f(
+            buffers.as_ptr(),
+            widths.as_ptr(),
+            heights.as_ptr(),
+            params.as_ptr()
+        );
 
         let tr = unsafe { get_global_trace() };
         if trace {

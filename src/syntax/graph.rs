@@ -14,7 +14,8 @@ pub struct Graph {
     /// order.
     outputs: Vec<String>,
     /// Names of the required parameters,
-    /// computed form funcs.
+    /// computed form funcs. These are guaranteed to be
+    /// in lexicographic order.
     params: Vec<String>
 }
 
