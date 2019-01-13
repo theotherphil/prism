@@ -8,7 +8,10 @@
 //! $ cargo run --example jit -- -o /some/directory
 //!
 
+#![allow(dead_code)]
+
 use std::{
+    collections::HashMap,
     fs::File,
     io::{Result, Write},
     path::{Path, PathBuf}
@@ -16,6 +19,7 @@ use std::{
 use prism::{
     func,
     source,
+    param,
     syntax::*,
     codegen::*,
     image::*,
@@ -34,10 +38,11 @@ struct Opts {
 fn main() -> Result<()> {
     initialise_llvm_jit();
     let opts = Opts::from_args();
-    run(&opts.output_dir)
+    //run_blur(&opts.output_dir)
+    run_brighten(&opts.output_dir)
 }
 
-fn run(dir: &Path) -> Result<()> {
+fn run_blur(dir: &Path) -> Result<()> {
     // Define the pipeline
     let (x, y) = (Var::X, Var::Y);
     source!(input);
@@ -54,7 +59,53 @@ fn run(dir: &Path) -> Result<()> {
 
     // Run the generated code
     let inputs = [(&input, &example_image(6, 6))];
-    let (results, trace) = processor.process_with_tracing(&inputs);
+    let params = HashMap::new();
+    let (results, trace) = processor.process_with_tracing(&inputs, &params);
+
+    // Dump the inputs, outputs and intermediates
+    for func in graph.funcs() {
+        println!("{}", func.pretty_print());
+    }
+    for input in &inputs {
+        println!("{:?}", input);
+        save_to_png(&input.1, dir.join(&(input.0.name.clone() + ".png")))?;
+    }
+    for result in &results {
+        println!("{}: {:?}", result.0, result.1);
+        save_to_png(&result.1, dir.join(&(result.0.clone() + ".png")))?;
+    }
+
+    // Dump a text trace of all the reads and writes...
+    let mut f = File::create(dir.join("replay.txt"))?;
+    for action in trace.actions.borrow().iter() {
+        writeln!(f, "{:?}", action)?;
+    }
+    // ... and an animated gif showing them.
+    write_replay_animation(dir.join("replay.gif"), &trace, 60)?;
+
+    Ok(())
+}
+
+fn run_brighten(dir: &Path) -> Result<()> {
+    // Define the pipeline
+    let (x, y) = (Var::X, Var::Y);
+    source!(input);
+    param!(p);
+    func!(bright = input.at(x, y) + &p);
+    let graph = Graph::new("brighten", vec![bright]);
+
+    // Generate LLVM IR
+    let context = Context::new();
+    let module = create_optimised_module(&context, &graph, dir);
+
+    // Generate native code
+    let processor = create_processor(module, &graph);
+
+    // Run the generated code
+    let inputs = [(&input, &example_image(6, 6))];
+    let mut params = HashMap::new();
+    params.insert(p, 50);
+    let (results, trace) = processor.process_with_tracing(&inputs, &params);
 
     // Dump the inputs, outputs and intermediates
     for func in graph.funcs() {

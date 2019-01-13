@@ -1,7 +1,6 @@
 
 use std::fmt;
 use std::ops::{Add, Div, Mul, Sub};
-use std::collections::HashSet;
 use crate::syntax::pretty_print::*;
 
 // [NOTE: AST terminology]
@@ -130,6 +129,18 @@ impl PrettyPrint for VarExpr {
     }
 }
 
+/// A runtime parameter to a function of type i32.
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct Param {
+    pub name: String
+}
+
+impl Param {
+    pub fn new(name: &str) -> Param {
+        Param { name: name.to_string() }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Access {
     /// The stage from which we're reading
@@ -165,6 +176,7 @@ pub enum Definition {
     Access(Access),
     // All intermediate calculations happen at type i32 for now
     Const(i32),
+    Param(String),
     // TODO: share code for printing and lowering arithmetic expressions
     // TODO: between VarExpr and Definition
     Add(Box<Definition>, Box<Definition>),
@@ -174,14 +186,27 @@ pub enum Definition {
 }
 
 impl Definition {
-    fn sources(&self) -> Vec<String> {
+    pub(crate) fn sources(&self) -> Vec<String> {
         match self {
             Definition::Access(a) => vec![a.source.clone()],
             Definition::Const(_) => vec![],
+            Definition::Param(_) => vec![],
             Definition::Add(l, r) => l.sources().into_iter().chain(r.sources()).collect(),
             Definition::Mul(l, r) => l.sources().into_iter().chain(r.sources()).collect(),
             Definition::Sub(l, r) => l.sources().into_iter().chain(r.sources()).collect(),
             Definition::Div(l, r) => l.sources().into_iter().chain(r.sources()).collect(),
+        }
+    }
+
+    pub(crate) fn params(&self) -> Vec<String> {
+        match self {
+            Definition::Access(_) => vec![],
+            Definition::Const(_) => vec![],
+            Definition::Param(p) => vec![p.clone()],
+            Definition::Add(l, r) => l.params().into_iter().chain(r.params()).collect(),
+            Definition::Mul(l, r) => l.params().into_iter().chain(r.params()).collect(),
+            Definition::Sub(l, r) => l.params().into_iter().chain(r.params()).collect(),
+            Definition::Div(l, r) => l.params().into_iter().chain(r.params()).collect(),
         }
     }
 }
@@ -208,6 +233,20 @@ macro_rules! impl_definition_bin_op {
                 $ctor(Box::new(Definition::Const(self)), Box::new(rhs))
             }
         }
+
+        impl $trait_name<&Param> for Definition {
+            type Output = Definition;
+            fn $trait_op(self, rhs: &Param) -> Definition {
+                $ctor(Box::new(self), Box::new(Definition::Param(rhs.name.clone())))
+            }
+        }
+
+        impl $trait_name<Definition> for &Param {
+            type Output = Definition;
+            fn $trait_op(self, rhs: Definition) -> Definition {
+                $ctor(Box::new(Definition::Param(self.name.clone())), Box::new(rhs))
+            }
+        }
     };
 }
 
@@ -221,6 +260,7 @@ impl PrettyPrint for Definition {
         match self {
             Definition::Access(a) => a.pretty_print(),
             Definition::Const(c) => c.to_string(),
+            Definition::Param(p) => p.clone(),
             Definition::Add(l, r) => combine_with_op("+", l, r),
             Definition::Sub(l, r) => combine_with_op("-", l, r),
             Definition::Mul(l, r) => combine_with_op("*", l, r),
@@ -233,35 +273,6 @@ impl PrettyPrint for Definition {
             Definition::Access(_) | Definition::Const(_) => true,
             _ => false
         }
-    }
-}
-
-#[derive(Debug, Clone)]
-pub struct Func {
-    pub(crate) name: String,
-    pub(crate) definition: Definition
-}
-
-impl Func {
-    pub fn new(name: &str, definition: Definition) -> Func {
-        Func {
-            name: name.to_string(),
-            definition: definition
-        }
-    }
-
-    /// Returns the name of all the sources mentioned
-    /// in this func's definition
-    pub fn sources(&self) -> Vec<String> {
-        self.definition.sources()
-    }
-
-    pub fn at<U, V>(&self, x: U, y: V) -> Definition
-    where
-        U: Into<VarExpr>,
-        V: Into<VarExpr>
-    {
-        Definition::Access(Access::new(&self.name, x.into(), y.into()))
     }
 }
 
@@ -282,88 +293,6 @@ impl Source {
         V: Into<VarExpr>
     {
         Definition::Access(Access::new(&self.name, x.into(), y.into()))
-    }
-}
-
-impl PrettyPrint for Func {
-    fn pretty_print(&self) -> String {
-        format!("{}(x, y) = {}", self.name, self.definition.pretty_print())
-    }
-
-    fn is_leaf(&self) -> bool {
-        true
-    }
-}
-
-/// Shorthand for creating a new `Source`.
-///
-/// The following code samples are equivalent.
-/// 
-/// ```source!(input);```
-///
-/// ```let input = Source::new("input");```
-#[macro_export]
-macro_rules! source {
-    ($name:ident) => {
-        let $name = Source::new(stringify!($name));
-    }
-}
-
-/// Shorthand for creating a new `Func`.
-///
-/// The following code samples are equivalent.
-/// 
-/// ```func!(g = f.at(x, y));```
-///
-/// ```let g = Func::new("g", f.at(x, y));```
-#[macro_export]
-macro_rules! func {
-    ($name:ident = $($rest:tt)*) => {
-        let $name = Func::new(stringify!($name), $($rest)*);
-    }
-}
-
-/// Doesn't yet look very graph-like...
-pub struct Graph {
-    pub name: String,
-    funcs: Vec<Func>,
-    /// Names of the required input buffers,
-    /// computed from funcs
-    inputs: Vec<String>,
-    /// Names of the output buffers (including)
-    /// all intermediates), in some valid dependency
-    /// order
-    outputs: Vec<String>
-}
-
-impl Graph {
-    pub fn new(name: &str, funcs: Vec<Func>) -> Graph {
-        let name = name.to_string();
-        // The names of the funcs being computed
-        let func_names: HashSet<String> = funcs.iter().map(|f| f.name.clone()).collect();
-        // The buffers that any func reads from
-        let reads: HashSet<String> = funcs.iter().flat_map(|f| f.sources()).collect();
-        // The buffers that are read from but not
-        // computed and so must be provided as inputs
-        let mut inputs: Vec<String> = reads.difference(&func_names).cloned().collect();
-        inputs.sort();
-        // TODO: actually do the topological sort!
-        // TODO: for now we just assume that the inputs were provided in a valid order
-        let outputs: Vec<String> = funcs.iter().map(|f| f.name.clone()).collect();
-
-        Graph { name, funcs, inputs, outputs }
-    }
-
-    pub fn funcs(&self) -> &[Func] {
-        &self.funcs
-    }
-
-    pub fn inputs(&self) -> &[String] {
-        &self.inputs
-    }
-
-    pub fn outputs(&self) -> &[String] {
-        &self.outputs
     }
 }
 

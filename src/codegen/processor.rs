@@ -31,24 +31,34 @@ impl<'c> Processor<'c> {
         Processor { _engine: engine, function_pointer, inputs, outputs }
     }
 
-    pub fn process(&self, inputs: &[(&Source, &GrayImage)]) -> HashMap<String, GrayImage> {
-        self.process_impl(inputs, false).0
+    pub fn process(
+        &self,
+        inputs: &[(&Source, &GrayImage)],
+        params: &HashMap<Param, i32>
+    ) -> HashMap<String, GrayImage> {
+        self.process_impl(inputs, params, false).0
     }
 
     /// Uses horrible global state for tracing.
     pub fn process_with_tracing(
         &self,
-        inputs: &[(&Source, &GrayImage)]
+        inputs: &[(&Source, &GrayImage)],
+        params: &HashMap<Param, i32>
     ) -> (HashMap<String, GrayImage>, Trace) {
-        let r = self.process_impl(inputs, true);
+        let r = self.process_impl(inputs, params, true);
         (r.0, r.1.unwrap())
     }
 
     fn process_impl(
         &self,
         inputs: &[(&Source, &GrayImage)],
+        params: &HashMap<Param, i32>,
         trace: bool
     ) -> (HashMap<String, GrayImage>, Option<Trace>) {
+        // TODO: HACK HACK HACK
+        assert!(params.len() <= 1);
+        let param_value = if params.len() == 0 { 0 } else { *params.iter().nth(0).unwrap().1 };
+
         // Assume that all images are the same size for now. This will not be true in general
         let (w, h) = inputs[0].1.dimensions();
 
@@ -90,11 +100,13 @@ impl<'c> Processor<'c> {
                 let r0 = &mut calculated_images[0].1;
                 let f: extern "C" fn(
                     *const u8, usize, usize,
-                    *mut u8, usize, usize
+                    *mut u8, usize, usize,
+                    i32
                 ) = unsafe { mem::transmute(self.function_pointer) };
                 f(
                     i0.buffer.as_ptr(), i0.width, i0.height,
-                    r0.buffer.as_mut_ptr(), r0.width, r0.height
+                    r0.buffer.as_mut_ptr(), r0.width, r0.height,
+                    param_value
                 );
             },
             (1, 2) => {
@@ -105,12 +117,14 @@ impl<'c> Processor<'c> {
                 let f: extern "C" fn(
                     *const u8, usize, usize,
                     *mut u8, usize, usize,
-                    *mut u8, usize, usize
+                    *mut u8, usize, usize,
+                    i32
                 ) = unsafe { mem::transmute(self.function_pointer) };
                 f(
                     i0.buffer.as_ptr(), i0.width, i0.height,
                     r0.buffer.as_mut_ptr(), r0.width, r0.height,
-                    r1.buffer.as_mut_ptr(), r1.width, r1.height
+                    r1.buffer.as_mut_ptr(), r1.width, r1.height,
+                    param_value
                 );
             },
             (2, 1) => {
@@ -120,12 +134,14 @@ impl<'c> Processor<'c> {
                 let f: extern "C" fn(
                     *const u8, usize, usize,
                     *const u8, usize, usize,
-                    *mut u8, usize, usize
+                    *mut u8, usize, usize,
+                    i32
                 ) = unsafe { mem::transmute(self.function_pointer) };
                 f(
                     i0.buffer.as_ptr(), i0.width, i0.height,
                     i1.buffer.as_ptr(), i1.width, i1.height,
-                    r0.buffer.as_mut_ptr(), r0.width, r0.height
+                    r0.buffer.as_mut_ptr(), r0.width, r0.height,
+                    param_value
                 );
             },
             (2, 2) => {
@@ -138,13 +154,15 @@ impl<'c> Processor<'c> {
                     *const u8, usize, usize,
                     *const u8, usize, usize,
                     *mut u8, usize, usize,
-                    *mut u8, usize, usize
+                    *mut u8, usize, usize,
+                    i32
                 ) = unsafe { mem::transmute(self.function_pointer) };
                 f(
                     i0.buffer.as_ptr(), i0.width, i0.height,
                     i1.buffer.as_ptr(), i1.width, i1.height,
                     r0.buffer.as_mut_ptr(), r0.width, r0.height,
-                    r1.buffer.as_mut_ptr(), r1.width, r1.height
+                    r1.buffer.as_mut_ptr(), r1.width, r1.height,
+                    param_value
                 );
             },
             (_, _) => panic!("Unsupported signature")

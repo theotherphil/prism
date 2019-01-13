@@ -88,6 +88,7 @@ pub fn lower_definition(
     match definition {
         Definition::Access(a) => lower_access(builder, llvm_func, a, width, height, symbols),
         Definition::Const(c) => builder.const_i32(*c),
+        Definition::Param(p) => symbols.get(&p),
         Definition::Add(l, r) => builder.add(recurse(l), recurse(r)),
         Definition::Mul(l, r) => builder.mul(recurse(l), recurse(r)),
         Definition::Sub(l, r) => builder.sub(recurse(l), recurse(r)),
@@ -130,6 +131,7 @@ pub fn create_ir_module<'c, 'g>(context: &'c Context, graph: &'g Graph) -> Modul
 
     let mut symbols = SymbolTable::new();
 
+    // Register tracing functions
     let log_read_type = builder.func_type(
         builder.type_void(),
         &mut [builder.type_i8_ptr(), builder.type_i32(), builder.type_i32()]
@@ -149,18 +151,28 @@ pub fn create_ir_module<'c, 'g>(context: &'c Context, graph: &'g Graph) -> Modul
         .chain(graph.outputs())
         .collect::<Vec<_>>();
 
+    // Construct signature of generated function
     let mut llvm_func_params = vec![];
     for _ in &buffer_names {
         llvm_func_params.push(builder.type_i8_ptr());
         llvm_func_params.push(builder.type_i64());
         llvm_func_params.push(builder.type_i64());
     }
+    // TODO: total hack that assumes there's always exactly one i32 parameter.
+    // TODO: fix buffer and param passing to provide arrays.
+    llvm_func_params.push(builder.type_i32());
     let llvm_func_type = builder.func_type(builder.type_void(), &mut llvm_func_params);
     let llvm_func = builder.add_func(&module, &graph.name, llvm_func_type);
     let params = builder.get_params(llvm_func);
 
     for (i, b) in buffer_names.iter().enumerate() {
         symbols.add(b, params[3 * i]);
+    }
+
+    // TODO: remove this hackery
+    assert!(graph.params().len() == 1);
+    for (i, p) in graph.params().iter().enumerate() {
+        symbols.add(p, params[3 * buffer_names.len() + i]);
     }
 
     // We currently assume that all input buffers will have the same dimensions
