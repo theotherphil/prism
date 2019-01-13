@@ -1,6 +1,5 @@
 
 use std::fmt;
-use std::ops::{Add, Div, Mul, Sub};
 use crate::syntax::pretty_print::*;
 
 // [NOTE: AST terminology]
@@ -38,76 +37,6 @@ pub enum VarExpr {
     Add(Box<VarExpr>, Box<VarExpr>),
     Sub(Box<VarExpr>, Box<VarExpr>),
     Mul(Box<VarExpr>, Box<VarExpr>)
-}
-
-macro_rules! impl_var_expr_bin_op {
-    ($trait_name:ident, $trait_op:ident, $ctor:expr) => {
-        impl $trait_name<Self> for VarExpr {
-            type Output = VarExpr;
-            fn $trait_op(self, rhs: Self) -> VarExpr {
-                $ctor(Box::new(self), Box::new(rhs))
-            }
-        }
-
-        impl $trait_name<i32> for VarExpr {
-            type Output = VarExpr;
-            fn $trait_op(self, rhs: i32) -> VarExpr {
-                $ctor(Box::new(self), Box::new(VarExpr::Const(rhs)))
-            }
-        }
-
-        impl $trait_name<VarExpr> for i32 {
-            type Output = VarExpr;
-            fn $trait_op(self, rhs: VarExpr) -> VarExpr {
-                $ctor(Box::new(VarExpr::Const(self)), Box::new(rhs))
-            }
-        }
-
-        impl $trait_name<VarExpr> for Var {
-            type Output = VarExpr;
-            fn $trait_op(self, rhs: VarExpr) -> VarExpr {
-                $ctor(Box::new(VarExpr::Var(self)), Box::new(rhs))
-            }
-        }
-
-        impl $trait_name<Var> for VarExpr {
-            type Output = VarExpr;
-            fn $trait_op(self, rhs: Var) -> VarExpr {
-                $ctor(Box::new(self), Box::new(VarExpr::Var(rhs)))
-            }
-        }
-
-        impl $trait_name<i32> for Var {
-            type Output = VarExpr;
-            fn $trait_op(self, rhs: i32) -> VarExpr {
-                $ctor(Box::new(VarExpr::Var(self)), Box::new(VarExpr::Const(rhs)))
-            }
-        }
-
-        impl $trait_name<Var> for i32 {
-            type Output = VarExpr;
-            fn $trait_op(self, rhs: Var) -> VarExpr {
-                $ctor(Box::new(VarExpr::Const(self)), Box::new(VarExpr::Var(rhs)))
-            }
-        }
-
-        impl $trait_name<Var> for Var {
-            type Output = VarExpr;
-            fn $trait_op(self, rhs: Var) -> VarExpr {
-                $ctor(Box::new(VarExpr::Var(self)), Box::new(VarExpr::Var(rhs)))
-            }
-        }
-    };
-}
-
-impl_var_expr_bin_op!(Add, add, VarExpr::Add);
-impl_var_expr_bin_op!(Sub, sub, VarExpr::Sub);
-impl_var_expr_bin_op!(Mul, mul, VarExpr::Mul);
-
-impl Into<VarExpr> for Var {
-    fn into(self) -> VarExpr {
-        VarExpr::Var(self)
-    }
 }
 
 impl PrettyPrint for VarExpr {
@@ -211,50 +140,6 @@ impl Definition {
     }
 }
 
-macro_rules! impl_definition_bin_op {
-    ($trait_name:ident, $trait_op:ident, $ctor:expr) => {
-        impl $trait_name<Self> for Definition {
-            type Output = Definition;
-            fn $trait_op(self, rhs: Self) -> Definition {
-                $ctor(Box::new(self), Box::new(rhs))
-            }
-        }
-
-        impl $trait_name<i32> for Definition {
-            type Output = Definition;
-            fn $trait_op(self, rhs: i32) -> Definition {
-                $ctor(Box::new(self), Box::new(Definition::Const(rhs)))
-            }
-        }
-
-        impl $trait_name<Definition> for i32 {
-            type Output = Definition;
-            fn $trait_op(self, rhs: Definition) -> Definition {
-                $ctor(Box::new(Definition::Const(self)), Box::new(rhs))
-            }
-        }
-
-        impl $trait_name<&Param> for Definition {
-            type Output = Definition;
-            fn $trait_op(self, rhs: &Param) -> Definition {
-                $ctor(Box::new(self), Box::new(Definition::Param(rhs.name.clone())))
-            }
-        }
-
-        impl $trait_name<Definition> for &Param {
-            type Output = Definition;
-            fn $trait_op(self, rhs: Definition) -> Definition {
-                $ctor(Box::new(Definition::Param(self.name.clone())), Box::new(rhs))
-            }
-        }
-    };
-}
-
-impl_definition_bin_op!(Add, add, Definition::Add);
-impl_definition_bin_op!(Sub, sub, Definition::Sub);
-impl_definition_bin_op!(Mul, mul, Definition::Mul);
-impl_definition_bin_op!(Div, div, Definition::Div);
-
 impl PrettyPrint for Definition {
     fn pretty_print(&self) -> String {
         match self {
@@ -293,6 +178,52 @@ impl Source {
         V: Into<VarExpr>
     {
         Definition::Access(Access::new(&self.name, x.into(), y.into()))
+    }
+}
+
+
+#[derive(Debug, Clone)]
+pub struct Func {
+    pub(crate) name: String,
+    pub(crate) definition: Definition
+}
+
+impl Func {
+    pub fn new(name: &str, definition: Definition) -> Func {
+        Func {
+            name: name.to_string(),
+            definition: definition
+        }
+    }
+
+    /// Returns the name of all the sources mentioned
+    /// in this func's definition.
+    pub fn sources(&self) -> Vec<String> {
+        self.definition.sources()
+    }
+
+    /// Returns the names of all the params mentioned
+    /// in this func's definition.
+    pub fn params(&self) -> Vec<String> {
+        self.definition.params()
+    }
+
+    pub fn at<U, V>(&self, x: U, y: V) -> Definition
+    where
+        U: Into<VarExpr>,
+        V: Into<VarExpr>
+    {
+        Definition::Access(Access::new(&self.name, x.into(), y.into()))
+    }
+}
+
+impl PrettyPrint for Func {
+    fn pretty_print(&self) -> String {
+        format!("{}(x, y) = {}", self.name, self.definition.pretty_print())
+    }
+
+    fn is_leaf(&self) -> bool {
+        true
     }
 }
 
