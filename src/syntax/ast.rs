@@ -1,5 +1,8 @@
 
-use std::fmt;
+use std::{
+    collections::HashMap,
+    fmt
+};
 use crate::syntax::pretty_print::*;
 
 // [NOTE: AST terminology]
@@ -18,6 +21,56 @@ use crate::syntax::pretty_print::*;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Var { X, Y }
+
+pub struct Schedule {
+    /// Schedules indexed by function name.
+    pub(crate) func_schedules: HashMap<String, FuncSchedule>
+}
+
+impl Schedule {
+    pub fn new() -> Schedule {
+        Schedule { func_schedules: HashMap::new() }
+    }
+
+    pub fn add_func(&mut self, func: &Func, sched: FuncSchedule) {
+        self.func_schedules.insert(func.name.to_string(), sched);
+    }
+
+    pub fn add_source(&mut self, func: &Source, sched: FuncSchedule) {
+        self.func_schedules.insert(func.name.to_string(), sched);
+    }
+
+    pub fn get_func_schedule(&self, func: &Func) -> &FuncSchedule {
+        self.func_schedules.get(&func.name).unwrap()
+    }
+
+    pub fn get_source_schedule(&self, func: &Source) -> &FuncSchedule {
+        self.func_schedules.get(&func.name).unwrap()
+    }
+}
+
+// TODO: implement real schedules. 
+// Need iteration order, compute location and storage
+// location for each func. Compute location determins how a function's
+// loops nest inside those of its callers, storage location determines
+// the point in the loop nest where its storage is allocated, and iteration
+// order defines the nesting order of its loops
+pub struct FuncSchedule {
+    // TODO support more than just X and Y!
+    pub(crate) variables: Vec<Var>
+}
+
+impl FuncSchedule {
+    /// By default the y variable is iterated in the outer loop
+    pub fn by_row() -> FuncSchedule {
+        FuncSchedule { variables: vec![Var::Y, Var::X] }
+    }
+
+    /// Iterates over the x variable in the outer loop
+    pub fn by_column() -> FuncSchedule {
+        FuncSchedule { variables: vec![Var::X, Var::Y] }
+    }
+}
 
 impl fmt::Display for Var {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {

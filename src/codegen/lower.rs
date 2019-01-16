@@ -270,13 +270,21 @@ pub fn create_ir_module<'c, 'g>(context: &'c Context, graph: &'g Graph) -> Modul
     let x_max = symbols.get(&width_symbol_name(final_func_name));
 
     for func in graph.funcs() {
-        let generate_x_body = |symbols: &mut SymbolTable| {
+        let sched = graph.schedule.get_func_schedule(func);
+        // Hack hack hack
+        let y_outer = sched.variables[0] == Var::Y;
+        let (outer_variable, outer_max, inner_variable, inner_max) = if y_outer {
+            ("y", y_max, "x", x_max)
+        } else {
+            ("x", x_max, "y", y_max)
+        };
+        let generate_inner_body = |symbols: &mut SymbolTable| {
             lower_func(&builder, llvm_func, func, &mut *symbols);
         };
-        let generate_y_body = |symbols| {
-            generate_loop(&builder, "x", x_max, llvm_func, symbols, generate_x_body);
+        let generate_outer_body = |symbols| {
+            generate_loop(&builder, inner_variable, inner_max, llvm_func, symbols, generate_inner_body);
         };
-        generate_loop(&builder, "y", y_max, llvm_func, &mut symbols, generate_y_body);
+        generate_loop(&builder, outer_variable, outer_max, llvm_func, &mut symbols, generate_outer_body);
     }
 
     builder.ret_void();

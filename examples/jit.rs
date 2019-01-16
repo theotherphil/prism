@@ -46,7 +46,12 @@ fn run_blur(base_dir: &Path) -> Result<()> {
     source!(input);
     func!(blur_h = (input.at(x - 1, y) + input.at(x, y) + input.at(x + 1, y)) / 3);
     func!(blur_v = (blur_h.at(x, y - 1) + blur_h.at(x, y) + blur_h.at(x, y + 1)) / 3);
-    let graph = Graph::new("blur3x3", vec![blur_h, blur_v]);
+    let mut sched = Schedule::new();
+    // TODO: remove the distinction between Func and Source in most parts of the code
+    sched.add_source(&input, FuncSchedule::by_row());
+    sched.add_func(&blur_h, FuncSchedule::by_column());
+    sched.add_func(&blur_v, FuncSchedule::by_row());
+    let graph = Graph::new("blur3x3", vec![blur_h, blur_v], sched);
 
     compile_and_run(
         base_dir,
@@ -60,7 +65,10 @@ fn run_brighten(base_dir: &Path) -> Result<()> {
     source!(input);
     param!(p);
     func!(bright = input.at(x, y) + &p);
-    let graph = Graph::new("brighten", vec![bright]);
+    let mut sched = Schedule::new();
+    sched.add_source(&input, FuncSchedule::by_row());
+    sched.add_func(&bright, FuncSchedule::by_row());
+    let graph = Graph::new("brighten", vec![bright], sched);
 
     let mut params = HashMap::new();
     params.insert(p, 50);
@@ -79,18 +87,20 @@ fn run_threshold(base_dir: &Path) -> Result<()> {
 
     // if input(x, y) > 100 { 250 } else { 0 }
     // no syntactic sugar exists for this yet
-    let r = input.at(x, y);
     let cond = Definition::Cond(
         Condition::new(
             Comparison::GT,
-            r,
+            input.at(x, y),
             Definition::Const(100),
             Definition::Const(250),
             Definition::Const(0)
         )
     );
     func!(thresh = cond);
-    let graph = Graph::new("threshold", vec![thresh]);
+    let mut sched = Schedule::new();
+    sched.add_source(&input, FuncSchedule::by_row());
+    sched.add_func(&thresh, FuncSchedule::by_row());
+    let graph = Graph::new("threshold", vec![thresh], sched);
 
     compile_and_run(
         base_dir,
