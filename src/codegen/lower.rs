@@ -27,11 +27,12 @@ pub fn lower_access(
     builder: &Builder,
     llvm_func: LLVMValueRef,
     access: &Access,
-    width: LLVMValueRef,
-    height: LLVMValueRef,
     symbols: &mut SymbolTable
 ) -> LLVMValueRef {
     let input = symbols.get(&access.source);
+    let width = symbols.get(&width_symbol_name(&access.source));
+    let height = symbols.get(&height_symbol_name(&access.source));
+
     let x = symbols.get("x");
     let y = symbols.get("y");
     let log_read = symbols.get("log_read");
@@ -80,13 +81,11 @@ pub fn lower_definition(
     builder: &Builder,
     llvm_func: LLVMValueRef,
     definition: &Definition,
-    width: LLVMValueRef,
-    height: LLVMValueRef,
     symbols: &mut SymbolTable
 ) -> LLVMValueRef {
-    let mut recurse = |v| lower_definition(builder, llvm_func, v, width, height, symbols);
+    let mut recurse = |v| lower_definition(builder, llvm_func, v, symbols);
     match definition {
-        Definition::Access(a) => lower_access(builder, llvm_func, a, width, height, symbols),
+        Definition::Access(a) => lower_access(builder, llvm_func, a, symbols),
         Definition::Const(c) => builder.const_i32(*c),
         Definition::Param(p) => symbols.get(&p),
         Definition::Cond(c) => {
@@ -129,12 +128,11 @@ pub fn lower_func(
     builder: &Builder,
     llvm_func: LLVMValueRef,
     func: &Func,
-    width: LLVMValueRef,
-    height: LLVMValueRef,
     symbols: &mut SymbolTable
 ) {
-    let val = lower_definition(builder, llvm_func, &func.definition, width, height, symbols);
+    let val = lower_definition(builder, llvm_func, &func.definition, symbols);
     let (x, y) = (symbols.get("x"), symbols.get("y"));
+    let width = symbols.get(&width_symbol_name(&func.name));
     let offset = builder.add(builder.mul(y, width), x);
     let ptr = builder.in_bounds_gep(symbols.get(&func.name), offset);
     let trunc = builder.trunc(val, builder.type_i8());
@@ -149,6 +147,16 @@ pub fn lower_func(
 /// Name of the global variable used to store the given buffer name.
 fn global_buffer_string_name(name: &str) -> String {
     String::from(name) + "_name"
+}
+
+/// Name of the symbol used to store the width of a given buffer.
+fn width_symbol_name(buffer_name: &str) -> String {
+    String::from(buffer_name) + "_width"
+}
+
+/// Name of the symbol used to store the height of a given buffer.
+fn height_symbol_name(buffer_name: &str) -> String {
+    String::from(buffer_name) + "_height"
 }
 
 /// Add symbols for the static log_read and log_write functions and add these functions to `module`.
@@ -188,7 +196,7 @@ struct ProcessingParams {
     widths: LLVMValueRef,
     // i64*
     heights: LLVMValueRef,
-    // i32 *
+    // i32*
     params: LLVMValueRef
 }
 
@@ -238,29 +246,32 @@ pub fn create_ir_module<'c, 'g>(context: &'c Context, graph: &'g Graph) -> Modul
     builder.position_at_end(entry);
     
     // Add expressions for each buffer and param to the symbol table.
-    // We currently assume that all buffers have the same dimension, so just
-    // use the dimensions of the last image.
-    let (mut width, mut height) = (builder.const_i32(0), builder.const_i32(0));
     for (i, b) in graph.input_then_outputs().iter().enumerate() {
         // Global variable holding the name of this buffer, to use when tracing
         symbols.add(&global_buffer_string_name(b), builder.global_string(b, b));
         // Construct expressions for accessing the nth buffer
         let (buffer, buffer_width, buffer_height) = params.nth_buffer(&builder, i);
         symbols.add(b, buffer);
-        width = buffer_width;
-        height = buffer_height;
+        let width = builder.trunc(buffer_width, builder.type_i32());
+        let height = builder.trunc(buffer_height, builder.type_i32());
+        symbols.add(&width_symbol_name(b), width);
+        symbols.add(&height_symbol_name(b), height);
     }
     for (i, p) in graph.params().iter().enumerate() {
         let param = params.nth_param(&builder, i);
         symbols.add(p, param);
     }
 
-    let y_max = builder.trunc(height, builder.type_i32());
-    let x_max = builder.trunc(width, builder.type_i32());
+    // TODO: need to switch from processing a graph to computing a single
+    // TODO: designated output image, and compute loop bounds by working
+    // TODO: backwards from it
+    let final_func_name = &graph.funcs().iter().last().unwrap().name;
+    let y_max = symbols.get(&height_symbol_name(final_func_name));
+    let x_max = symbols.get(&width_symbol_name(final_func_name));
 
     for func in graph.funcs() {
         let generate_x_body = |symbols: &mut SymbolTable| {
-            lower_func(&builder, llvm_func, func, x_max, y_max, &mut *symbols);
+            lower_func(&builder, llvm_func, func, &mut *symbols);
         };
         let generate_y_body = |symbols| {
             generate_loop(&builder, "x", x_max, llvm_func, symbols, generate_x_body);

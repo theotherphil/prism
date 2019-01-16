@@ -39,6 +39,23 @@ pub enum VarExpr {
     Mul(Box<VarExpr>, Box<VarExpr>)
 }
 
+impl VarExpr {
+    pub fn evaluate(&self, x: i32, y: i32) -> i32 {
+        match self {
+            VarExpr::Var(v) => {
+                match v {
+                    Var::X => x,
+                    Var::Y => y
+                }
+            },
+            VarExpr::Const(c) => *c,
+            VarExpr::Add(l, r) => l.evaluate(x, y) + r.evaluate(x, y),
+            VarExpr::Sub(l, r) => l.evaluate(x, y) - r.evaluate(x, y),
+            VarExpr::Mul(l, r) => l.evaluate(x, y) * r.evaluate(x, y)
+        }
+    }
+}
+
 impl PrettyPrint for VarExpr {
     fn pretty_print(&self) -> String {
         match self {
@@ -265,7 +282,6 @@ impl Source {
         Definition::Access(Access::new(&self.name, x.into(), y.into()))
     }
 }
-
 
 #[derive(Debug, Clone)]
 pub struct Func {
