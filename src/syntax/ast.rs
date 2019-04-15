@@ -92,6 +92,56 @@ pub enum VarExpr {
     Mul(Box<VarExpr>, Box<VarExpr>)
 }
 
+#[derive(Copy, Clone, PartialEq, Eq, Debug)]
+enum Extent { Width, Height }
+
+fn extent(e: &VarExpr, ex: Extent, w: i32, h: i32) -> (i32, i32) {
+    assert!(w >= 0, "width must be non-negative");
+    assert!(h >= 0, "height must be non-negative");
+    let (d1, d2) = match ex {
+        Extent::Width => ((0, w - 1), (0, h - 1)),
+        Extent::Height => ((0, h - 1), (0, w - 1))
+    };
+    match e {
+        VarExpr::Var(v) => {
+            match v {
+                Var::X => d1,
+                Var::Y => d2
+            }
+        },
+        VarExpr::Const(c) => (*c, *c),
+        VarExpr::Add(l, r) => {
+            let l = extent(&*l, ex, w, h);
+            let r = extent(&*r, ex, w, h);
+            (l.0 + r.0, l.1 + r.1)
+        },
+        VarExpr::Sub(l, r) => {
+            let l = extent(&*l, ex, w, h);
+            let r = extent(&*r, ex, w, h);
+            (l.0 - r.1, l.1 - r.0)
+        },
+        VarExpr::Mul(l, r) => {
+            let l = extent(&*l, ex, w, h);
+            let r = extent(&*r, ex, w, h);
+            let (a, b, c, d) = (l.0 * r.0, l.0 * r.1, l.1 * r.0, l.1 * r.1);
+            (
+                std::cmp::min(std::cmp::min(a, b), std::cmp::min(c, d)),
+                std::cmp::max(std::cmp::max(a, b), std::cmp::max(c, d))
+            )
+        }
+    }
+}
+
+/// Returns [left, right]
+pub fn x_extent(e: &VarExpr, w: i32, h: i32) -> (i32, i32) {
+    extent(e, Extent::Width, w, h)
+}
+
+/// Returns [top, bottom]
+pub fn y_extent(e: &VarExpr, w: i32, h: i32) -> (i32, i32) {
+    extent(e, Extent::Height, w, h)
+}
+
 impl VarExpr {
     pub fn evaluate(&self, x: i32, y: i32) -> i32 {
         match self {
@@ -409,5 +459,20 @@ mod tests {
             g.at(x + 1, y - 1) + g.at(x - 1, y) + 2
         );
         assert_eq!(f.pretty_print(), "f(x, y) = (g(x + 1, y - 1) + g(x - 1, y)) + 2");
+    }
+
+    #[test]
+    fn test_x_extent() {
+        let (x, y) = (Var::X, Var::Y);
+        let (w, h) = (10, 20);
+        assert_eq!(x_extent(&(x.into()), w, h), (0, 9));
+        assert_eq!(x_extent(&(x + 1), w, h), (1, 10));
+        assert_eq!(x_extent(&(y.into()), w, h), (0, 19));
+        assert_eq!(x_extent(&VarExpr::Const(8), w, h), (8, 8));
+        assert_eq!(x_extent(&(x + y), w, h), (0, 28));
+        assert_eq!(x_extent(&(x - y), w, h), (-19, 9));
+        assert_eq!(x_extent(&(x * y), w, h), (0, 9 * 19));
+        assert_eq!(x_extent(&((x - y) * (x + 1)), w, h), (-19 * 10, 9 * 10));
+        assert_eq!(x_extent(&((x - y) * (x - y)), w, h), (-19 * 9, 19 * 19));
     }
 }
