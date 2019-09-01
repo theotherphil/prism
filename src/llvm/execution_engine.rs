@@ -3,7 +3,7 @@
 use std::{
     ffi::CString,
     marker::PhantomData,
-    mem
+    mem::{MaybeUninit, self}
 };
 use llvm_sys::execution_engine::*;
 use crate::llvm::module::Module;
@@ -19,7 +19,7 @@ pub struct ExecutionEngine<'c> {
 impl<'c> ExecutionEngine<'c> {
     pub fn new(module: Module<'_>) -> ExecutionEngine<'_> {
         unsafe {
-            let mut engine = mem::uninitialized();
+            let mut engine = MaybeUninit::uninit().as_mut_ptr();
             let mut out = mem::zeroed();
             LLVMCreateExecutionEngineForModule(&mut engine, module.module, &mut out);
             ExecutionEngine { engine, context: module.context }

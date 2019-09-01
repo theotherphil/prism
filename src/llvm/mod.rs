@@ -5,6 +5,8 @@ pub use self::context::*;
 pub use self::execution_engine::*;
 pub use self::module::*;
 
+use std::mem::MaybeUninit;
+
 mod builder;
 mod context;
 mod execution_engine;
@@ -35,16 +37,16 @@ pub fn create_module_from_ir_string<'c, 'i>(context: &'c Context, ir: &'i str) -
         let ir_buffer = LLVMCreateMemoryBufferWithMemoryRangeCopy(
             ir.as_ptr() as *const _, ir.as_bytes().len(), std::ptr::null());
 
-        let mut module = mem::uninitialized();
+        let module = MaybeUninit::uninit().as_mut_ptr();
         let mut message = mem::zeroed();
-        let res = LLVMParseIRInContext(context.context, ir_buffer, &mut module, &mut message);
+        let res = LLVMParseIRInContext(context.context, ir_buffer, module, &mut message);
 
         if res != 0 {
             let message_str = CString::from_raw(message);
             panic!("IR parsing failed: {:?}", message_str);
         }
 
-        context.wrap_llvm_module(module)
+        context.wrap_llvm_module(*module)
     }
 }
 
